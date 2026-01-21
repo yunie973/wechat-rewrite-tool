@@ -2,14 +2,13 @@ import streamlit as st
 import requests
 import json
 from bs4 import BeautifulSoup
-import markdown
 
-# --- 页面配置 ---
-st.set_page_config(page_title="AI二创排版一体化", layout="centered")
-st.title("📱 移动端二创排版工作台")
+# --- 页面设置 ---
+st.set_page_config(page_title="极简二创助手", layout="centered")
+st.title("🚀 极简二创工作台")
 
-# --- 核心抓取逻辑 ---
-def get_article_text(url):
+# --- 核心抓取 ---
+def get_text(url):
     headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"}
     try:
         res = requests.get(url, headers=headers, timeout=10)
@@ -18,17 +17,34 @@ def get_article_text(url):
         return content.get_text(separator='\n', strip=True) if content else None
     except: return None
 
-# --- 流式 AI 逻辑 ---
-def stream_ai_rewrite(text, api_key):
+# --- 流式逻辑 ---
+def stream_ai(text, api_key):
     url = "https://api.deepseek.com/chat/completions"
-    # 这里使用您提供的原创性加强建议
-    prompt = f"假设你是一个专业的自媒体作家...原文=({text})"
+    
+    # 极简提示词：强制禁止废话，禁止标签
+    system_prompt = "你是一个只会输出成品文章的机器人。禁止任何开场白、解释说明。禁止使用‘标题：’、‘正文：’、‘主体：’等标签词。"
+    user_prompt = f"""
+    任务：对以下内容进行原创深度二创。
+    要求：
+    1. 最开头直接给出5个爆款标题，每行一个。
+    2. 空一行后直接开始正文。
+    3. 严格遵循原创建议：句型重组、视角转换、内容拓展。
+    4. 禁止出现任何“以下是、好的、改写如下”等字样。
+    
+    原文内容：({text})
+    """
+    
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {
         "model": "deepseek-chat",
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": True # 开启流式，提高反应速度
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "stream": True,
+        "temperature": 0.7
     }
+    
     response = requests.post(url, headers=headers, json=payload, stream=True)
     for line in response.iter_lines():
         if line:
@@ -39,44 +55,44 @@ def stream_ai_rewrite(text, api_key):
                 yield data['choices'][0]['delta'].get('content', '')
             except: continue
 
-# --- 界面 UI ---
-target_url = st.text_input("粘贴文章链接")
+# --- 界面 ---
+url = st.text_input("粘贴文章链接", placeholder="https://mp.weixin.qq.com/s/...")
 
-if st.button("✨ 极速二创并预览", type="primary", use_container_width=True):
+if st.button("✨ 立即开始二创", type="primary", use_container_width=True):
     api_key = st.secrets.get("DEEPSEEK_API_KEY")
     if not api_key:
-        st.error("请配置 API Key")
-    elif target_url:
-        raw_text = get_article_text(target_url)
+        st.error("请先配置 Secrets 中的 DEEPSEEK_API_KEY")
+    elif url:
+        raw_text = get_text(url)
         if raw_text:
-            st.info("🚀 正在流式生成，请稍候...")
-            placeholder = st.empty() # 文字展示区
+            status_placeholder = st.empty()
+            content_placeholder = st.empty()
             full_content = ""
             
-            # 流式展示 Markdown 原文
-            for chunk in stream_ai_rewrite(raw_text, api_key):
+            status_placeholder.info("⚡ 正在极速生成...")
+            
+            # 流式展示
+            for chunk in stream_ai(raw_text, api_key):
                 full_content += chunk
-                placeholder.markdown(full_content + "▌")
+                content_placeholder.markdown(full_content + "▌")
             
-            placeholder.markdown(full_content)
+            status_placeholder.empty()
+            content_placeholder.empty()
             
-            st.divider()
+            # 分离展示并提供复制按钮
+            tab1, tab2 = st.tabs(["📋 纯文本 (一键复制)", "📝 Markdown (一键复制)"])
             
-            # --- 自制预览区 (手机端长按复制此处) ---
-            st.subheader("🟢 微信预览区（长按此处复制）")
-            # 使用微信常用的排版样式
-            wechat_style = """
-            <style>
-                .wechat-box { 
-                    padding: 15px; border: 1px solid #eee; border-radius: 8px; 
-                    line-height: 1.8; color: #333; font-family: sans-serif;
-                }
-                .wechat-box h2 { color: #07c160; border-bottom: 2px solid #07c160; }
-            </style>
-            """
-            # 将 Markdown 转为 HTML
-            rendered_html = markdown.markdown(full_content)
-            st.markdown(wechat_style + f'<div class="wechat-box">{rendered_html}</div>', unsafe_allow_html=True)
-            
-            # 同时也提供一个代码框方便复制 Markdown 源码
-            st.code(full_content, language="markdown")
+            with tab1:
+                # 去除 Markdown 符号的“干净”文本
+                clean_text = full_content.replace("#", "").replace("**", "").strip()
+                st.code(clean_text, language="text")
+                st.caption("适合直接粘贴到公众号普通编辑器")
+                
+            with tab2:
+                # 保留所有 Markdown 格式
+                st.code(full_content, language="markdown")
+                st.caption("适合粘贴到 MdNice 或其他 Markdown 排版工具")
+                
+            st.success("✅ 生成完毕")
+        else:
+            st.error("内容提取失败")
