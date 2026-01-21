@@ -1,63 +1,71 @@
 import streamlit as st
 import requests
-from bs4 import BeautifulSoup
+import json
 
-# 页面基础配置
-st.set_page_config(page_title="公众号二创Web助手", layout="centered")
-st.title("📝 公众号爆款二创 Web 助手")
+st.set_page_config(page_title="爆款二创-流式版", layout="centered")
+st.title("⚡ 极速二创工作台")
 
-# 核心抓取函数
 def get_article_text(url):
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15"}
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"}
     try:
         res = requests.get(url, headers=headers, timeout=10)
+        from bs4 import BeautifulSoup
         soup = BeautifulSoup(res.text, 'html.parser')
         content = soup.find('div', id='js_content')
-        if content:
-            return content.get_text(separator='\n', strip=True)
-        return None
+        return content.get_text(separator='\n', strip=True) if content else None
     except:
         return None
 
-# AI改写逻辑
-def ai_rewrite(text, api_key):
-    # 此处已完整集成您提供的原创性加强建议
-    user_prompt = f"""假设你是一个专业的自媒体作家。我希望你能对下方的文字进行二次创作，确保其具有较高的原创性。为了帮助你进行这项任务，请参考以下原创性加强建议:
-句型与词汇调整:通过替换原文中的句子结构和词汇以传达同样的思想。内容拓展与插入:增添背景知识、实例，以丰富文章内容，并降低关键词密度。
-避免关键词使用:避免使用原文中的明显关键词或用其它词汇替换。结构与逻辑调整:重新排列文章的结构和逻辑流程，确保与原文的相似度降低。
-变更叙事视角:在某些情境下，选择使用第三人称代替第一人称以降低风格相似性。
-重点聚焦:更改文章的主要讨论点，以减少模糊匹配的风险，关键词分析:对比原文和重写版本，调整或稀释高度相似的关键词。角度与焦点转换:从不同的角度描述相同的主题，以减少内容相似性。避免直接引用:确保没有直接复制原文或其他已知来源的内容，综合抄袭检测反馈:根据提供的抄袭检测反馈，进行有针对性的调整。请依照上述建议，根据原文开始你的创作。
-
-注意：
-1. 先给出 5 个爆款标题。
-2. 使用 Markdown 格式输出。
-
-原文=（{text}）"""
-
+def stream_ai_rewrite(text, api_key):
+    """流式生成器函数"""
+    url = "https://api.deepseek.com/chat/completions"
+    prompt = f"假设你是一个专业的自媒体作家...（此处补全你之前的专业提示词）...原文=（{text}）"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
     payload = {
         "model": "deepseek-chat",
-        "messages": [{"role": "user", "content": user_prompt}]
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": True  # 开启流式传输
     }
-    headers = {"Authorization": f"Bearer {api_key}"}
-    r = requests.post("https://api.deepseek.com/chat/completions", json=payload, headers=headers)
-    return r.json()['choices'][0]['message']['content']
 
-# 界面展示
-target_url = st.text_input("请输入微信文章链接")
-if st.button("✨ 开始生成二创内容", type="primary"):
-    try:
-        api_key = st.secrets["DEEPSEEK_API_KEY"]
-    except:
-        st.error("未配置 API Key，请在云端后台设置 Secrets。")
-        st.stop()
+    response = requests.post(url, headers=headers, json=payload, stream=True)
+    
+    # 解析流式数据块
+    for line in response.iter_lines():
+        if line:
+            chunk = line.decode('utf-8').removeprefix('data: ')
+            if chunk == '[DONE]': break
+            try:
+                data = json.loads(chunk)
+                delta = data['choices'][0]['delta'].get('content', '')
+                yield delta
+            except:
+                continue
 
-    if target_url:
-        with st.spinner("DeepSeek 正在全力改写中..."):
-            raw_text = get_article_text(target_url)
-            if raw_text:
-                result = ai_rewrite(raw_text, api_key)
-                st.markdown("### 🔥 生成结果")
-                st.code(result, language="markdown")
-            else:
+target_url = st.text_input("粘贴微信文章链接")
 
-                st.error("抓取内容失败，请检查链接。")
+if st.button("✨ 立即生成 (流式预览)", type="primary"):
+    api_key = st.secrets.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        st.error("请先配置 API Key")
+    elif target_url:
+        raw_text = get_article_text(target_url)
+        if raw_text:
+            st.subheader("🔥 创作进行中...")
+            # 使用 Streamlit 的流式显示容器
+            placeholder = st.empty()
+            full_content = ""
+            
+            # 实时更新文字到页面
+            for chunk in stream_ai_rewrite(raw_text, api_key):
+                full_content += chunk
+                placeholder.markdown(full_content + "▌")
+            
+            placeholder.markdown(full_content) # 完成后移除光标
+            st.success("生成完毕！")
+            st.code(full_content, language="markdown")
+        else:
+            st.error("内容抓取失败")
