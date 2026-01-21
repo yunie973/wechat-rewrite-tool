@@ -4,8 +4,8 @@ import json
 from bs4 import BeautifulSoup
 
 # --- 页面基础设置 ---
-st.set_page_config(page_title="高级二创工作台", layout="centered")
-st.title("✍️ 深度二创排版助手")
+st.set_page_config(page_title="极简二创 Pro", layout="centered")
+st.title("✍️ 深度二创专业工作台")
 
 # --- 核心抓取函数 ---
 def get_article_content(url):
@@ -22,20 +22,18 @@ def get_article_content(url):
 def stream_ai_rewrite(text, api_key):
     url = "https://api.deepseek.com/chat/completions"
     
-    # 终极死命令：禁止特定词汇，强制标题格式
-    system_prompt = """你是一个专业的公众号深度二创机器人。
-    1. 严禁输出：导语、主体、结语、前言、后记、改写如下、好的、总结。
-    2. 结构要求：
-       - 开头第一行写：【推荐爆款标题】
-       - 紧接着输出 5 个带序号的标题（1. 2. 3. 4. 5.）。
-       - 空两行后直接开始正文。
-    3. 正文格式：
-       - 必须包含 3-4 个小标题。
-       - 小标题格式严格统一为：## 01 [标题内容]、## 02 [标题内容] 等。
-       - 正文段落之间保持空行。
-    4. 语气：犀利、专业、极具传播力。"""
+    # 终极提示词指令
+    system_prompt = """你是一个专业的公众号深度改写专家。
+    【禁令】：严禁输出“导语、主体、结语、前言、后记、总结”等词汇。严禁任何开场白。
+    【结构要求】：
+    1. 第一行直接写：【推荐爆款标题】
+    2. 接下来输出5个爆款标题，每个标题必须独占一行，且标题与标题之间必须空一行。格式为：1. XXX \n\n 2. XXX。
+    3. 标题结束后，空三行进入正文。
+    4. 正文开头：严禁直接使用小标题。必须先写一段100字左右的引入性文字，直接进入主题。
+    5. 正文后续：使用 ## 01. [内容]、## 02. [内容] 的格式设置小标题，小标题前后必须有换行。
+    6. 语气：犀利、专业、引人入胜。"""
     
-    user_prompt = f"任务：对以下内容进行深度二创。原文=（{text}）"
+    user_prompt = f"请根据原文进行深度二创。原文内容=（{text}）"
     
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {
@@ -64,44 +62,34 @@ target_url = st.text_input("🔗 粘贴微信文章链接")
 if st.button("🚀 开始极速生成", type="primary", use_container_width=True):
     api_key = st.secrets.get("DEEPSEEK_API_KEY")
     if not api_key:
-        st.error("请配置 DEEPSEEK_API_KEY")
+        st.error("请配置环境变量 DEEPSEEK_API_KEY")
     elif target_url:
-        with st.spinner("正在抓取并改写中..."):
+        with st.status("正在处理中...", expanded=True) as status:
             raw_text = get_article_content(target_url)
             if raw_text:
                 full_content = ""
                 placeholder = st.empty()
                 
-                # 流式输出
+                # 流式输出预览
                 for chunk in stream_ai_rewrite(raw_text, api_key):
                     full_content += chunk
                     placeholder.markdown(full_content + "▌")
-                
                 placeholder.markdown(full_content)
+                status.update(label="✅ 生成完毕", state="complete")
                 
                 st.divider()
                 
-                # --- 多版本展示 ---
-                tab1, tab2 = st.tabs(["📋 Markdown 纯文本版", "📱 手机长按预览版"])
+                # --- 多版本展示与复制 ---
+                tab1, tab2 = st.tabs(["📋 纯文本 (公众号直接粘贴)", "📝 Markdown (排版工具使用)"])
                 
                 with tab1:
-                    st.code(full_content, language="markdown")
-                    st.caption("✨ 此版本保留 ## 标记，粘贴到公众号或 MdNice 会自动识别大小标题")
+                    # 纯文本版：去除 Markdown 符号但保留换行逻辑
+                    clean_text = full_content.replace("## ", "").replace("**", "").strip()
+                    st.code(clean_text, language="text")
+                    st.caption("✨ 此版本已带序号，标题已换行，适合直接复制到微信编辑器")
                 
                 with tab2:
-                    # 自定义预览区，强制显示大小区别
-                    st.markdown("""
-                    <style>
-                        .preview-box { padding:10px; border:1px solid #ddd; border-radius:8px; line-height:1.7; color:#333; }
-                        .preview-box h2 { font-size: 1.3em; color: #07c160; margin-top:20px; }
-                        .preview-box p { margin-bottom: 15px; }
-                    </style>
-                    """, unsafe_allow_html=True)
-                    
-                    # 将内容转为简单的 HTML 预览
-                    import markdown
-                    html_preview = markdown.markdown(full_content)
-                    st.markdown(f'<div class="preview-box">{html_preview}</div>', unsafe_allow_html=True)
-                    st.caption("✨ 手机端建议长按此处绿色标题区域进行全选复制")
+                    st.code(full_content, language="markdown")
+                    st.caption("✨ 此版本带 ## 标记，建议粘贴到 MdNice 进行二次排版")
             else:
-                st.error("提取失败，请检查链接。")
+                st.error("内容抓取失败，请检查链接有效性。")
