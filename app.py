@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 
 # --- 页面基础设置 ---
 st.set_page_config(page_title="高级二创工作台", layout="centered")
-st.title("✍️ 高级二创一体化工具")
+st.title("✍️ 深度二创排版助手")
 
 # --- 核心抓取函数 ---
 def get_article_content(url):
@@ -14,34 +14,28 @@ def get_article_content(url):
         res = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(res.text, 'html.parser')
         content_div = soup.find('div', id='js_content')
-        if not content_div:
-            return None
-        # 提取文字并保持一定的换行结构
+        if not content_div: return None
         return content_div.get_text(separator='\n', strip=True)
-    except:
-        return None
+    except: return None
 
 # --- 流式 AI 逻辑 ---
 def stream_ai_rewrite(text, api_key):
     url = "https://api.deepseek.com/chat/completions"
     
-    # 深度强制指令：确保序号、小标题、无废话
-    system_prompt = """你是一个只会输出成品推文的专业改写机器人。
-    1. 禁止输出任何开场白（如“好的”、“为您改写”）。
-    2. 禁止输出任何标签词（如“标题：”、“正文：”、“导语：”、“小标题：”）。
-    3. 结构必须为：5个带数字序号的爆款标题 -> 空行 -> 带小标题的正文。
-    4. 正文的小标题必须独立成行，模仿原文的叙事节奏。"""
+    # 终极死命令：禁止特定词汇，强制标题格式
+    system_prompt = """你是一个专业的公众号深度二创机器人。
+    1. 严禁输出：导语、主体、结语、前言、后记、改写如下、好的、总结。
+    2. 结构要求：
+       - 开头第一行写：【推荐爆款标题】
+       - 紧接着输出 5 个带序号的标题（1. 2. 3. 4. 5.）。
+       - 空两行后直接开始正文。
+    3. 正文格式：
+       - 必须包含 3-4 个小标题。
+       - 小标题格式严格统一为：## 01 [标题内容]、## 02 [标题内容] 等。
+       - 正文段落之间保持空行。
+    4. 语气：犀利、专业、极具传播力。"""
     
-    user_prompt = f"""任务：对以下干细胞推文内容进行深度二创。
-    
-    要求：
-    - 开头直接给出5个爆款标题，必须带序号 1. 2. 3. 4. 5. 且每行一个。
-    - 正文必须根据原文逻辑，设置至少3-4个核心小标题。
-    - 严格执行原创建议：句型重组、视角转换、内容拓展。
-    
-    原文内容：
-    ({text})
-    """
+    user_prompt = f"任务：对以下内容进行深度二创。原文=（{text}）"
     
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {
@@ -65,40 +59,49 @@ def stream_ai_rewrite(text, api_key):
             except: continue
 
 # --- 界面展示 ---
-target_url = st.text_input("🔗 粘贴微信文章链接", placeholder="https://mp.weixin.qq.com/s/...")
+target_url = st.text_input("🔗 粘贴微信文章链接")
 
-if st.button("🚀 开始极速二创", type="primary", use_container_width=True):
+if st.button("🚀 开始极速生成", type="primary", use_container_width=True):
     api_key = st.secrets.get("DEEPSEEK_API_KEY")
     if not api_key:
-        st.error("请先在 Secrets 中配置 DEEPSEEK_API_KEY")
+        st.error("请配置 DEEPSEEK_API_KEY")
     elif target_url:
-        with st.spinner("正在抓取并同步改写中..."):
+        with st.spinner("正在抓取并改写中..."):
             raw_text = get_article_content(target_url)
             if raw_text:
-                content_placeholder = st.empty()
                 full_content = ""
+                placeholder = st.empty()
                 
-                # 流式输出，保证第一时间看到标题
+                # 流式输出
                 for chunk in stream_ai_rewrite(raw_text, api_key):
                     full_content += chunk
-                    content_placeholder.markdown(full_content + "▌")
+                    placeholder.markdown(full_content + "▌")
                 
-                content_placeholder.empty()
+                placeholder.markdown(full_content)
                 
-                # --- 分页展示与一键复制 ---
-                tab1, tab2 = st.tabs(["📋 纯文本版 (适合直接粘贴)", "📝 Markdown版 (适合排版工具)"])
+                st.divider()
+                
+                # --- 多版本展示 ---
+                tab1, tab2 = st.tabs(["📋 Markdown 纯文本版", "📱 手机长按预览版"])
                 
                 with tab1:
-                    # 纯文本版去掉 Markdown 符号
-                    clean_text = full_content.replace("#", "").replace("**", "").strip()
-                    st.code(clean_text, language="text")
-                    st.caption("✨ 特点：带序号标题，带换行小标题，无代码符号")
-                    
-                with tab2:
-                    # Markdown版保留格式
                     st.code(full_content, language="markdown")
-                    st.caption("✨ 特点：保留加粗和层级，适合粘贴至 MdNice")
+                    st.caption("✨ 此版本保留 ## 标记，粘贴到公众号或 MdNice 会自动识别大小标题")
+                
+                with tab2:
+                    # 自定义预览区，强制显示大小区别
+                    st.markdown("""
+                    <style>
+                        .preview-box { padding:10px; border:1px solid #ddd; border-radius:8px; line-height:1.7; color:#333; }
+                        .preview-box h2 { font-size: 1.3em; color: #07c160; margin-top:20px; }
+                        .preview-box p { margin-bottom: 15px; }
+                    </style>
+                    """, unsafe_allow_html=True)
                     
-                st.success("✅ 生成完毕！请点击右上方按钮复制。")
+                    # 将内容转为简单的 HTML 预览
+                    import markdown
+                    html_preview = markdown.markdown(full_content)
+                    st.markdown(f'<div class="preview-box">{html_preview}</div>', unsafe_allow_html=True)
+                    st.caption("✨ 手机端建议长按此处绿色标题区域进行全选复制")
             else:
-                st.error("无法抓取文章，请确认链接是否正确。")
+                st.error("提取失败，请检查链接。")
