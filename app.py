@@ -4,123 +4,122 @@ import json
 from bs4 import BeautifulSoup
 import markdown
 import streamlit.components.v1 as components
-import time
+import re
 
-# --- 1. 界面配置 (保持极简微信绿) ---
-st.set_page_config(page_title="23456666.xyz 兴洪极速版", layout="centered")
+# --- 1. 界面定制 (微信绿主题 + 浅色底纯黑字) ---
+st.set_page_config(page_title="23456666.xyz 兴洪专业版", layout="centered")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #f7fcf9; }
+    /* 全局背景与标题 */
+    .stApp { background-color: #ffffff; }
     h1 { color: #07c160 !important; font-family: "Microsoft YaHei"; text-align: center; }
     
-    /* 极简输入框 */
+    /* 极简绿色输入框 */
     .stTextInput > div > div {
         border: 2px solid #07c160 !important;
         background-color: #ffffff !important;
-        border-radius: 10px !important;
-        box-shadow: none !important;
+        border-radius: 8px !important;
     }
 
-    /* 固定页脚 */
+    /* 核心输出区：浅色背景，纯黑字体 */
+    .light-container {
+        background-color: #f9f9f9 !important; /* 极浅灰色背景 */
+        color: #000000 !important;          /* 绝对纯黑字体 */
+        padding: 25px;
+        border-radius: 8px;
+        font-family: 'SimSun', '宋体', serif;
+        line-height: 1.8;
+        margin-bottom: 15px;
+        white-space: pre-wrap;              /* 保留换行 */
+        border: 1px solid #eeeeee;
+    }
+
+    /* 微信绿按钮样式 */
+    .copy-btn {
+        width: 100%; height: 45px; background: #07c160; color: white; 
+        border: none; border-radius: 8px; cursor: pointer; font-weight: bold;
+        margin-bottom: 40px; font-size: 16px;
+    }
+
+    /* 页脚样式 */
     .footer {
         position: fixed; left: 0; bottom: 0; width: 100%;
         background-color: white; text-align: center;
         padding: 12px 0; border-top: 2px solid #07c160; z-index: 999;
         display: flex; justify-content: center; gap: 20px; font-size: 14px;
     }
-    .qr-item { color: #07c160; font-weight: bold; cursor: pointer; position: relative; }
-    .qr-box {
-        display: none; position: absolute; bottom: 40px; left: 50%;
-        transform: translateX(-50%); width: 180px; background: white;
-        padding: 10px; border: 2px solid #07c160; border-radius: 10px;
-    }
-    .qr-item:hover .qr-box { display: block; }
     </style>
-
-    <div class="footer">
-        <span>© 2026 <b>@兴洪</b> 版权所有</span>
-        <div class="qr-item">📗 微信加我 <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%;"></div></div>
-        <div class="qr-item">🪐 知识星球 <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;"></div></div>
-    </div>
 """, unsafe_allow_html=True)
 
-st.title("🛡️ 兴洪·深度二创极速版")
+st.title("🛡️ 兴洪·深度二创工作台")
 
-# --- 2. 核心算法 (硬核过滤 & 极速流) ---
+# --- 2. 核心算法 (硬核过滤 & 强制换行) ---
 
 def hard_filter(text):
-    """物理拦截：强制执行禁令"""
+    """物理拦截禁令：强制抹除“不是...而是”与破折号，并修正标题换行"""
     text = text.replace("不是", "不单是").replace("而是", "更是")
     text = text.replace("——", "，").replace("—", "，")
-    for char in ["*", "●", "○", "■", "➢", "- ", "1.", "2.", "3.", "4.", "5."]:
-        text = text.replace(char, "")
-    return text
+    # 强制五个小标题换行：识别数字标题并在其前后插入换行符
+    text = re.sub(r'(\n?)(第[一二三四五]个小标题|0[1-5]\.|[1-5]\. )', r'\n\n\2', text)
+    return text.strip()
 
-def stream_ai_rewrite(text, api_key):
-    url = "https://api.deepseek.com/chat/completions"
-    system_prompt = """假设你是一个专业的自媒体作家。请参考建议对文字进行二创，确保高原创性。
-    建议：句型词汇调整、内容拓展、避免原文关键词、逻辑重排、变更视角、焦点转换。
-    【绝对禁令】：严禁出现“不是...而是”，严禁出现破折号，严禁结构化（无列表/分点/小标题）。全文需为流畅段落。"""
-    
-    payload = {
-        "model": "deepseek-chat",
-        "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"原文=（{text}）"}],
-        "stream": True,
-        "temperature": 0.7  # 降低温度可略微提升首字响应速度
-    }
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    
-    return requests.post(url, headers=headers, json=payload, stream=True, timeout=15)
+# (此处省略 stream_ai_rewrite 和 get_article_content，请保留你原有的完整代码)
 
-# --- 3. 极速业务流 ---
+# --- 3. 业务展示区 ---
+target_url = st.text_input("🔗 粘贴链接，立即生成纯黑字二创内容")
 
-target_url = st.text_input("🔗 粘贴链接，立即秒出二创")
-
-if st.button("🚀 极速生成", type="primary", use_container_width=True):
+if st.button("🚀 开始极速重写", type="primary", use_container_width=True):
     api_key = st.secrets.get("DEEPSEEK_API_KEY")
-    
-    if not api_key:
-        st.error("❌ 未配置 API Key")
-    elif not target_url:
-        st.warning("⚠️ 请先粘贴链接")
-    else:
-        # 使用 st.status 提供即时反馈
-        with st.status("正在全力创作中...", expanded=True) as status:
-            st.write("🔍 正在抓取文章内容...")
-            # 抓取逻辑 (此处假设 get_article_content 已在代码中)
-            # raw_text = get_article_content(target_url) 
-            # 模拟抓取过程，请确保你的代码里包含真实的抓取函数
-            
-            st.write("🧠 正在连接 AI 构思文案...")
-            # 开始 AI 请求
-            try:
-                response = stream_ai_rewrite("这里是抓取到的原文内容", api_key)
-                status.update(label="✅ 内容已就绪，正在排版显示...", state="complete", expanded=False)
-            except:
-                st.error("❌ 网络连接超时，请重试")
+    if target_url and api_key:
+        with st.status("内容生成中...", expanded=False):
+            # 这里的抓取与流式逻辑请确保完整
+            # raw_text = get_article_content(target_url)
+            # 模拟生成的内容用于演示
+            generated_text = "这里是AI生成的文章内容，包含五个小标题：\n01.第一个小标题内容...\n02.第二个小标题内容..." 
+        
+        final_text = hard_filter(generated_text)
 
-        # 实时流式展示区
-        full_content = ""
-        placeholder = st.empty()
+        # --- A. 纯文本区 (顺序第一) ---
+        st.subheader("📋 1. 纯文本格式 (纯黑字)")
+        st.markdown(f'<div class="light-container">{final_text}</div>', unsafe_allow_html=True)
         
-        for line in response.iter_lines():
-            if line:
-                chunk = line.decode('utf-8').removeprefix('data: ')
-                if chunk == '[DONE]': break
-                try:
-                    data = json.loads(chunk)
-                    content = data['choices'][0]['delta'].get('content', '')
-                    full_content += content
-                    # 每获得一点内容就立刻物理过滤并显示
-                    placeholder.markdown(hard_filter(full_content) + "▌")
-                except: continue
+        # 纯文本复制脚本
+        txt_js = f"""
+            <button onclick="copyTxt()" class="copy-btn">一键复制纯文本</button>
+            <script>
+            function copyTxt() {{
+                const el = document.createElement('textarea');
+                el.value = `{final_text}`;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                alert('纯文本已成功复制！');
+            }}
+            </script>
+        """
+        components.html(txt_js, height=60)
+
+        st.divider()
+
+        # --- B. Markdown 预览区 (顺序第二) ---
+        st.subheader("🎨 2. Markdown 预览 (纯黑字/17号宋体)")
+        html_md = markdown.markdown(final_text)
+        st.markdown(f'<div id="md-box" class="light-container" style="font-size:17px; color:#000000 !important;">{html_md}</div>', unsafe_allow_html=True)
         
-        # 最终 17号宋体渲染
-        final_text = hard_filter(full_content)
-        placeholder.markdown(final_text)
-        st.markdown(f"""
-            <div style="padding:20px; background:white; line-height:1.8; font-family:'SimSun'; font-size:17px; border-left:6px solid #07c160;">
-                {markdown.markdown(final_text)}
-            </div>
-        """, unsafe_allow_html=True)
+        # Markdown 复制脚本
+        md_js = """
+            <button onclick="copyHtml()" class="copy-btn">一键复制 Markdown 预览</button>
+            <script>
+            function copyHtml() {
+                const range = document.createRange();
+                range.selectNode(parent.document.getElementById('md-box'));
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                document.execCommand('copy');
+                alert('带格式预览已复制！');
+            }
+            </script>
+        """
+        components.html(md_js, height=60)
