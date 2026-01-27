@@ -85,7 +85,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-st.title("🛡️ 兴洪·自媒体深度二创工作台")
+st.title("文章深度二创工作台")
 
 # --- 2. 核心算法：全套原创逻辑与硬核过滤器 ---
 
@@ -176,3 +176,4 @@ if st.button("🚀 极速生成兴洪重写版", type="primary", use_container_w
             """
             st.subheader("🟢 最终预览 (已抹除所有禁忌符号)")
             st.markdown(styled_output, unsafe_allow_html=True)
+
