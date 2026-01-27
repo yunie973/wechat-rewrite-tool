@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import markdown
 import streamlit.components.v1 as components
 
-# --- 1. 兴洪专属视觉皮肤 (微信绿主题) ---
+# --- 1. (极简微信绿) ---
 st.set_page_config(page_title="23456666.xyz 兴洪专业版", layout="centered")
 
 st.markdown("""
@@ -14,7 +14,27 @@ st.markdown("""
     .stApp { background-color: #f7fcf9; }
     h1 { color: #07c160 !important; font-family: "Microsoft YaHei", sans-serif; text-align: center; font-weight: 800; }
     
-    /* 微信绿按钮定制 */
+    /* --- 极简输入框定制 (核心修改点) --- */
+    /* 去掉默认的立体感和阴影，改为单一绿色边框 */
+    .stTextInput > div > div {
+        border: 2px solid #07c160 !important; /* 醒目的微信绿边框 */
+        background-color: #ffffff !important; /* 纯白背景 */
+        border-radius: 10px !important;       /* 圆润一点 */
+        box-shadow: none !important;          /* 去掉讨厌的默认阴影 */
+        padding: 2px !important;
+    }
+    /* 输入文字时的颜色 */
+    .stTextInput input {
+        color: #333 !important;
+        font-weight: 500;
+    }
+    /* 鼠标点进去输入时的聚焦效果 */
+    .stTextInput > div > div:focus-within {
+        border-color: #05a350 !important; /* 聚焦时边框颜色加深一点 */
+        box-shadow: 0 0 8px rgba(7, 193, 96, 0.3) !important; /* 加一点高级的绿色光晕 */
+    }
+    
+    /* --- 微信绿按钮定制 --- */
     div.stButton > button {
         background-color: #07c160 !important;
         color: white !important;
@@ -24,12 +44,14 @@ st.markdown("""
         font-weight: bold;
         border: none;
         box-shadow: 0 4px 12px rgba(7, 193, 96, 0.2);
+        transition: all 0.3s ease;
     }
-    
-    /* 输入框边框微信绿 */
-    .stTextInput div div { border-color: #07c160 !important; }
+    div.stButton > button:hover {
+        background-color: #05a350 !important; /* 悬停时稍微变深 */
+        box-shadow: 0 6px 16px rgba(7, 193, 96, 0.3);
+    }
 
-    /* 固定页脚与二维码交互 */
+    /* --- 固定页脚与二维码交互 --- */
     .footer {
         position: fixed;
         left: 0;
@@ -47,21 +69,23 @@ st.markdown("""
         align-items: center;
         gap: 20px;
     }
-    .qr-item { position: relative; color: #07c160; font-weight: bold; cursor: pointer; }
+    .qr-item { position: relative; color: #07c160; font-weight: bold; cursor: pointer; padding: 5px; }
     .qr-box {
         display: none;
         position: absolute;
-        bottom: 45px;
+        bottom: 50px;
         left: 50%;
         transform: translateX(-50%);
         width: 200px;
         background: white;
-        padding: 10px;
-        border: 2px solid #07c160;
-        border-radius: 10px;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        padding: 12px;
+        border: 3px solid #07c160;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        z-index: 1000;
     }
-    .qr-item:hover .qr-box { display: block; }
+    .qr-item:hover .qr-box { display: block; animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
     </style>
 
     <div class="footer">
@@ -71,39 +95,35 @@ st.markdown("""
         <div class="qr-item">
             📗 微信加我
             <div class="qr-box">
-                <img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%;">
-                <p style="margin:5px 0 0 0; font-size:12px;">扫一扫，与我联系</p>
+                <img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%; border-radius: 8px;">
+                <p style="margin:8px 0 0 0; font-size:13px; font-weight:bold;">扫一扫，直接联系我</p>
             </div>
         </div>
         <div class="qr-item">
             🪐 知识星球
             <div class="qr-box">
-                <img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;">
-                <p style="margin:5px 0 0 0; font-size:12px;">免费领取进阶干货</p>
+                <img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%; border-radius: 8px;">
+                <p style="margin:8px 0 0 0; font-size:13px; font-weight:bold;">免费领取进阶干货</p>
             </div>
         </div>
     </div>
 """, unsafe_allow_html=True)
 
-st.title("文章深度二创工作台")
+st.title("文章二创工作台")
 
-# --- 2. 核心算法：全套原创逻辑与硬核过滤器 ---
+# --- 2. 核心算法 (保持不变)：全套原创逻辑与硬核过滤器 ---
 
 def hard_filter(text):
     """物理拦截：强制抹除违禁词汇与符号"""
-    # 彻底封杀“不是...而是”句式
     text = text.replace("不是", "不单是").replace("而是", "更是")
-    # 彻底封杀破折号
     text = text.replace("——", "，").replace("—", "，")
-    # 彻底封杀结构化符号 (防止AI偷懒分点)
     for char in ["*", "●", "○", "■", "➢", "- ", "1.", "2.", "3.", "4.", "5."]:
         text = text.replace(char, "")
     return text
 
 def stream_ai_rewrite(text, api_key):
     url = "https://api.deepseek.com/chat/completions"
-    
-    # 注入用户提供的全套自媒体作家提示词
+    # 注入用户提供的全套自媒体作家提示词 (专家级)
     system_prompt = """假设你是一个专业的自媒体作家。我希望你能对下方的文字进行二次创作，确保其具有较高的原创性。
     请严格参考以下原创性加强建议:
     1. 句型与词汇调整:通过替换原文中的句子结构和词汇以传达同样的思想。
@@ -141,7 +161,7 @@ def stream_ai_rewrite(text, api_key):
                 yield data['choices'][0]['delta'].get('content', '')
             except: continue
 
-# --- 3. 业务逻辑 (抓取与展示) ---
+# --- 3. 业务逻辑 (保持不变) ---
 def get_article_content(url):
     headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"}
     try:
@@ -153,7 +173,7 @@ def get_article_content(url):
 
 target_url = st.text_input("🔗 粘贴文章链接，开始高原创重写")
 
-if st.button("🚀 极速生成兴洪重写版", type="primary", use_container_width=True):
+if st.button("🚀 即刻重写", type="primary", use_container_width=True):
     api_key = st.secrets.get("DEEPSEEK_API_KEY")
     if target_url and api_key:
         raw_text = get_article_content(target_url)
@@ -162,7 +182,6 @@ if st.button("🚀 极速生成兴洪重写版", type="primary", use_container_w
             placeholder = st.empty() 
             for chunk in stream_ai_rewrite(raw_text, api_key):
                 full_content += chunk
-                # 实时物理过滤
                 placeholder.markdown(hard_filter(full_content) + "▌")
             
             final_text = hard_filter(full_content)
@@ -170,10 +189,9 @@ if st.button("🚀 极速生成兴洪重写版", type="primary", use_container_w
             
             # 渲染预览区 (17号宋体)
             styled_output = f"""
-            <div id="copy-area" style="padding:20px; background:white; line-height:1.8; font-family:'SimSun'; font-size:17px; color:#333; border-left:5px solid #07c160;">
+            <div id="copy-area" style="padding:25px; background:white; line-height:1.8; font-family:'SimSun'; font-size:17px; color:#333; border-left:6px solid #07c160; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
                 {markdown.markdown(final_text)}
             </div>
             """
             st.subheader("🟢 最终预览 (已抹除所有禁忌符号)")
             st.markdown(styled_output, unsafe_allow_html=True)
-
