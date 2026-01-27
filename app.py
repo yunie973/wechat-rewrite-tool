@@ -14,14 +14,28 @@ st.markdown("""
     .stApp { background-color: #ffffff; color: #000000 !important; }
     h1 { color: #07c160 !important; font-family: "Microsoft YaHei"; text-align: center; font-weight: bold; }
     .stTextInput > div > div { border: 2px solid #07c160 !important; background-color: #ffffff !important; border-radius: 8px !important; }
-    .stTextInput input { color: #000000 !important; }
+    .stTextInput input { color: #000000 !important; font-weight: bold; }
     div.stButton > button { background-color: #07c160 !important; color: white !important; border-radius: 8px; height: 50px; font-weight: bold; border: none; width: 100%; }
     
-    /* 页脚与二维码交互 */
+    /* 灰底黑字容器样式 */
+    .output-container {
+        background-color: #f4f4f4 !important;
+        color: #000000 !important;
+        padding: 25px;
+        border-radius: 8px;
+        border: 1px solid #07c160;
+        font-family: 'SimSun', serif;
+        font-size: 17px;
+        line-height: 2;
+        white-space: pre-wrap;
+        margin-bottom: 10px;
+    }
+
+    /* 页脚与二维码 */
     .footer {
         position: fixed; left: 0; bottom: 0; width: 100%;
         background-color: white; padding: 12px 0; border-top: 2px solid #07c160;
-        z-index: 999; display: flex; justify-content: center; align-items: center; gap: 20px; font-size: 14px;
+        z-index: 999; display: flex; justify-content: center; align-items: center; gap: 20px;
     }
     .qr-item { color: #07c160; font-weight: bold; cursor: pointer; position: relative; }
     .qr-box {
@@ -33,7 +47,7 @@ st.markdown("""
     </style>
 
     <div class="footer">
-        <span style="color:#333;">© 2026 <b>@兴洪</b> 版权所有 | WX/QQ: 3326843406</span>
+        <span style="color:#333;">© 2026 <b>@兴洪</b> 版权所有</span>
         <div class="qr-item">📗 微信加我 <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%;"></div></div>
         <div class="qr-item">🪐 知识星球 <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;"></div></div>
     </div>
@@ -41,7 +55,7 @@ st.markdown("""
 
 st.title("🛡️ 深度重构级专业工作台")
 
-# --- 2. 核心函数 ---
+# --- 2. 核心算法 ---
 
 def get_article_content(url):
     headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"}
@@ -53,28 +67,26 @@ def get_article_content(url):
     except: return None
 
 def safety_filter(text):
-    """【物理拦截网】严格执行禁令并强制换行"""
+    """【物理拦截网】确保禁令绝对执行，并强制换行"""
     text = text.replace("\\n", "\n")
-    # 拦截禁令
+    # 物理拦截禁令
     text = text.replace("不是", "不单是").replace("而是", "更是").replace("——", "，").replace("—", "，")
-    # 爆款标题换行
-    text = re.sub(r'(【推荐爆款标题】)', r'\1\n', text)
-    # 小标题换行
+    # 强制爆款标题每行一个
+    text = re.sub(r'([1-5]\. )', r'\n\1', text)
+    # 强制小标题前后空行
     text = re.sub(r'(\n?)(## 0[1-4]\.)', r'\n\n\2', text)
-    return text
+    return text.strip()
 
 def stream_ai_rewrite(text, api_key):
     url = "https://api.deepseek.com/chat/completions"
-    system_prompt = """假设你是一个专业的自媒体作家。我希望你能对下方的文字进行二次创作，确保其具有较高的原创性。
-    【原创性加强建议】：句型词汇调整、内容拓展、避免关键词、结构逻辑调整、视角切换、重点聚焦、角度转换、避免直接引用。
-    【核心禁令】：
-    - 永远不要出现“不是....，而是”的句式。
-    - 绝对不要出现破折号（——）。
-    - 绝对禁止结构化：禁止使用列表、分点（如1.2.3.或A.B.C.），保持段落连贯性。
+    system_prompt = """假设你是一个专业的自媒体作家。请参考建议对文字进行二创。
+    【原创加强】：句型词汇调整、内容拓展、避免关键词、逻辑重排、视角切换等。
+    【核心禁令】：严禁使用“不是...而是”，严禁出现破折号，严禁结构化。
     【输出结构】：
     1. 第一行写【推荐爆款标题】，接着输出5个爆款标题，每行一个。
-    2. 标题区后空三行，正文开头必须先写150字引入语。
-    3. 小标题格式固定为 ## 01. XXX，总数控制在 2-4 个。"""
+    2. 标题区后空三行。
+    3. 正文开头先写150字引入语。
+    4. 小标题格式 ## 01. XXX，总数 2-4 个。"""
     
     payload = {
         "model": "deepseek-chat",
@@ -84,21 +96,17 @@ def stream_ai_rewrite(text, api_key):
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     return requests.post(url, headers=headers, json=payload, stream=True)
 
-# --- 3. 执行逻辑 ---
+# --- 3. 业务逻辑 ---
 
-target_url = st.text_input("🔗 粘贴链接开始高原创二创")
+target_url = st.text_input("🔗 粘贴链接开始深度二创")
 
-if st.button("🚀 开始深度创作"):
+if st.button("🚀 开始极速重写"):
     api_key = st.secrets.get("DEEPSEEK_API_KEY")
-    if not api_key:
-        st.error("请先在 Streamlit Secrets 中配置 DEEPSEEK_API_KEY")
-    elif target_url:
+    if target_url and api_key:
         raw_text = get_article_content(target_url)
         if raw_text:
             full_content = ""
             placeholder = st.empty()
-            
-            # --- 真正的数据流循环 ---
             response = stream_ai_rewrite(raw_text, api_key)
             for line in response.iter_lines():
                 if line:
@@ -107,41 +115,61 @@ if st.button("🚀 开始深度创作"):
                     try:
                         data = json.loads(chunk)
                         full_content += data['choices'][0]['delta'].get('content', '')
-                        # 实时显示过滤后的内容
                         placeholder.markdown(safety_filter(full_content) + "▌")
                     except: continue
             
             final_text = safety_filter(full_content)
-            placeholder.empty() # 清除流式占位
+            placeholder.empty()
 
-            # --- 最终 18/17号 排版 ---
-            html_main = markdown.markdown(final_text)
-            styled_output = f"""
-            <div id="copy-area" style="padding: 25px; background: #fff; line-height: 2; text-align: justify; border-left: 8px solid #07c160; margin-bottom: 80px;">
-                <style>
-                    .rich-content {{ font-family: "SimSun", serif !important; font-size: 17px !important; color: #000000 !important; }}
-                    .rich-content h2 {{ font-size: 18px !important; font-family: "SimHei", sans-serif !important; font-weight: bold !important; color: #000000 !important; margin: 30px 0 15px 0; }}
-                    .rich-content p {{ margin-bottom: 20px; color: #000 !important; }}
-                </style>
-                <div class="rich-content">{html_main}</div>
-            </div>
-            """
-            st.markdown(styled_output, unsafe_allow_html=True)
+            # --- A. 纯文本区 (顺序第一) ---
+            st.subheader("📋 1. 纯文本格式")
+            st.markdown(f'<div class="output-container">{final_text}</div>', unsafe_allow_html=True)
             
-            # 复制脚本
+            # 使用 JS 直接将变量传递进按钮，解决复制失效问题
+            txt_safe = final_text.replace('`', '\\`').replace('$', '\\$')
             components.html(f"""
-                <button id="c-btn" style="width:100%; height:50px; background:#07c160; color:white; border:none; border-radius:8px; font-weight:bold; font-size:18px; cursor:pointer;">📋 一键复制成品</button>
+                <button onclick="copyTxt()" style="width:100%;height:45px;background:#07c160;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">点击复制纯文本</button>
                 <script>
-                document.getElementById('c-btn').onclick = function() {{
-                    const area = parent.document.getElementById('copy-area');
+                function copyTxt() {{
+                    const text = `{txt_safe}`;
+                    const el = document.createElement('textarea');
+                    el.value = text;
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    alert('纯文本复制成功！');
+                }}
+                </script>
+            """, height=55)
+
+            st.divider()
+
+            # --- B. Markdown 预览区 (顺序第二) ---
+            st.subheader("🎨 2. Markdown 预览 (18号/17号)")
+            html_md = markdown.markdown(final_text)
+            st.markdown(f"""
+                <div id="md-box" class="output-container" style="background:#fff !important;">
+                    <style>
+                        #md-box h2 {{ font-size: 18px !important; font-family: "SimHei" !important; color: #000 !important; margin-top: 25px; }}
+                        #md-box p {{ font-size: 17px !important; font-family: "SimSun" !important; color: #000 !important; }}
+                    </style>
+                    {html_md}
+                </div>
+            """, unsafe_allow_html=True)
+            
+            components.html("""
+                <button onclick="copyMd()" style="width:100%;height:45px;background:#07c160;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">点击复制 Markdown 预览</button>
+                <script>
+                function copyMd() {
                     const range = document.createRange();
-                    range.selectNode(area);
+                    range.selectNode(parent.document.getElementById('md-box'));
                     window.getSelection().removeAllRanges();
                     window.getSelection().addRange(range);
                     document.execCommand('copy');
-                    this.innerText = '✅ 复制成功';
-                }}
+                    alert('预览格式复制成功，可直接贴入公众号！');
+                }
                 </script>
-            """, height=80)
+            """, height=55)
         else:
-            st.error("抓取失败，请检查链接是否为微信公众号文章")
+            st.error("抓取失败")
