@@ -320,6 +320,7 @@ def jump_to_tab_by_text(tab_text: str):
 
 # =============================
 # 7) 免Key编辑器（Quill）——复制按钮/工具栏固定
+#   ✅ 改动点都在这个函数里：删表格/删Tx(ql-clean)/表情120+/字体10+/字号10-50/可滚动到底部/去alert弹窗
 # =============================
 def render_wechat_editor(initial_html: str, version: int):
     init_js = json.dumps(initial_html or "")
@@ -346,6 +347,15 @@ def render_wechat_editor(initial_html: str, version: int):
       </div>
     </div>
 
+    <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div id="toast" style="display:none;padding:6px 10px;border-radius:10px;background:rgba(7,193,96,0.12);color:#067a3d;font-weight:800;font-size:13px;">
+        已完成
+      </div>
+      <div style="color:#666;font-size:12px;">
+        提示：编辑区可滚动到底部；复制富文本可直接贴公众号后台；复制Markdown用于二次处理（不保证完全等效渲染）。
+      </div>
+    </div>
+
     <!-- 工具栏固定在 topbar 内 -->
     <div id="toolbar" style="margin-top:10px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:6px 8px;">
       <span class="ql-formats">
@@ -353,13 +363,31 @@ def render_wechat_editor(initial_html: str, version: int):
         <button class="ql-redo" type="button">↷</button>
       </span>
 
+      <!-- ✅ 字体 10+（含公众号默认） -->
       <span class="ql-formats">
-        <select class="ql-size">
-          <option value="14px">14px</option>
-          <option value="17px" selected>17px</option>
-          <option value="18px">18px</option>
-          <option value="22px">22px</option>
+        <select class="ql-font">
+          <option value="wechat" selected>公众号默认</option>
+          <option value="simsun">宋体</option>
+          <option value="simhei">黑体</option>
+          <option value="yahei">微软雅黑</option>
+          <option value="pingfang">苹方</option>
+          <option value="kaiti">楷体</option>
+          <option value="fangsong">仿宋</option>
+          <option value="arial">Arial</option>
+          <option value="helvetica">Helvetica</option>
+          <option value="times">Times</option>
+          <option value="georgia">Georgia</option>
+          <option value="courier">Courier</option>
+          <option value="monospace">Monospace</option>
         </select>
+      </span>
+
+      <!-- ✅ 字号自由 10-50px -->
+      <span class="ql-formats" style="display:inline-flex;align-items:center;gap:6px;">
+        <span style="font-weight:800;color:#000;font-size:12px;">字号</span>
+        <input id="fontSizeInput" type="number" min="10" max="50" value="17"
+          style="width:72px;padding:6px 8px;border:1px solid rgba(0,0,0,0.15);border-radius:8px;outline:none;font-weight:800;">
+        <span style="font-weight:800;color:#000;font-size:12px;">px</span>
       </span>
 
       <span class="ql-formats">
@@ -372,7 +400,7 @@ def render_wechat_editor(initial_html: str, version: int):
       <span class="ql-formats">
         <select class="ql-color"></select>
         <select class="ql-background"></select>
-        <button class="ql-clean"></button>
+        <!-- ✅ 删掉 Tx（清除格式）= 不再放 ql-clean -->
       </span>
 
       <span class="ql-formats">
@@ -396,7 +424,7 @@ def render_wechat_editor(initial_html: str, version: int):
 
       <span class="ql-formats">
         <button id="btnHr" type="button">—</button>
-        <button id="btnTable" type="button">▦</button>
+        <!-- ✅ 删表格按钮 -->
         <button id="btnEmoji" type="button">😊</button>
       </span>
     </div>
@@ -405,22 +433,50 @@ def render_wechat_editor(initial_html: str, version: int):
   <!-- 可滚动编辑区 -->
   <div id="editorHost" style="padding:12px;">
     <div id="editor" style="border:1px solid rgba(0,0,0,0.08);border-radius:12px;"></div>
-    <div style="margin-top:10px;color:#666;font-size:12px;line-height:1.6;">
-      提示：复制富文本可直接贴公众号后台；复制Markdown用于二次处理（不保证公众号完全等效渲染）。
+
+    <!-- 表情面板（可滚动） -->
+    <div id="emojiPanel" style="display:none;margin-top:10px;border:1px solid rgba(0,0,0,0.10);border-radius:12px;padding:10px;background:#fff;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div style="font-weight:900;color:#000;">表情库（120+）</div>
+        <button id="emojiClose" style="background:#f2f2f2;color:#000;border:1px solid rgba(0,0,0,0.12);border-radius:10px;padding:6px 10px;cursor:pointer;font-weight:900;">关闭</button>
+      </div>
+      <div id="emojiGrid" style="margin-top:10px;display:grid;grid-template-columns:repeat(12, 1fr);gap:6px;max-height:180px;overflow:auto;padding-right:4px;"></div>
+      <div style="margin-top:8px;color:#666;font-size:12px;">点一下就会插入到光标处。</div>
     </div>
   </div>
 </div>
 
 <style>
-.ql-container {{ border:none !important; font-family:SimSun,宋体,serif; }}
-.ql-editor {{
-  min-height: 520px;
+/* 字体映射：让下拉里的字体在编辑区真正生效 */
+.ql-font-wechat {{ font-family: -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,"Microsoft YaHei",sans-serif; }}
+.ql-font-simsun {{ font-family: SimSun,宋体,serif; }}
+.ql-font-simhei {{ font-family: SimHei,黑体,sans-serif; }}
+.ql-font-yahei {{ font-family: "Microsoft YaHei","微软雅黑",sans-serif; }}
+.ql-font-pingfang {{ font-family: "PingFang SC","苹方",-apple-system,BlinkMacSystemFont,sans-serif; }}
+.ql-font-kaiti {{ font-family: KaiTi,楷体,serif; }}
+.ql-font-fangsong {{ font-family: FangSong,仿宋,serif; }}
+.ql-font-arial {{ font-family: Arial,sans-serif; }}
+.ql-font-helvetica {{ font-family: Helvetica,Arial,sans-serif; }}
+.ql-font-times {{ font-family: "Times New Roman",Times,serif; }}
+.ql-font-georgia {{ font-family: Georgia,serif; }}
+.ql-font-courier {{ font-family: "Courier New",Courier,monospace; }}
+.ql-font-monospace {{ font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; }}
+
+/* ✅ 让编辑区内部滚动（可到最底部） */
+:root {{
+  --editorH: 600px;
+}}
+#editor .ql-container {{
+  height: var(--editorH) !important;
+  border: none !important;
+}}
+#editor .ql-editor {{
+  height: 100% !important;
+  overflow-y: auto !important;
   font-size: 17px;
   line-height: 2;
   color: #000;
-}}
-@media (max-width: 768px) {{
-  .ql-editor {{ min-height: 420px; }}
+  padding: 14px 14px !important;
 }}
 </style>
 
@@ -428,9 +484,45 @@ def render_wechat_editor(initial_html: str, version: int):
 const INITIAL_HTML = {init_js};
 const VERSION = {ver_js};
 
-const Size = Quill.import('attributors/style/size');
-Size.whitelist = ['14px','17px','18px','22px'];
-Quill.register(Size, true);
+function toast(msg) {{
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg || '完成';
+  el.style.display = 'inline-block';
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => {{
+    el.style.display = 'none';
+  }}, 1600);
+}}
+
+// 依据屏幕动态算编辑区高度（手机 360~420；桌面 520~640）
+function computeEditorH() {{
+  const w = window.innerWidth || 1024;
+  const h = window.innerHeight || 900;
+  if (w <= 768) {{
+    // 手机
+    let val = Math.round(h * 0.52);
+    val = Math.max(360, Math.min(420, val));
+    document.documentElement.style.setProperty('--editorH', val + 'px');
+  }} else {{
+    // 桌面
+    let val = Math.round(h * 0.62);
+    val = Math.max(520, Math.min(640, val));
+    document.documentElement.style.setProperty('--editorH', val + 'px');
+  }}
+}}
+computeEditorH();
+window.addEventListener('resize', computeEditorH);
+
+// ===== Quill 注册：font + size(允许任意 px) =====
+const Font = Quill.import('formats/font');
+Font.whitelist = ['wechat','simsun','simhei','yahei','pingfang','kaiti','fangsong','arial','helvetica','times','georgia','courier','monospace'];
+Quill.register(Font, true);
+
+// ✅ 允许任意 size（配合输入框 10-50）
+const SizeStyle = Quill.import('attributors/style/size');
+SizeStyle.whitelist = null;
+Quill.register(SizeStyle, true);
 
 const quill = new Quill('#editor', {{
   theme: 'snow',
@@ -488,49 +580,121 @@ document.querySelector('.ql-redo').addEventListener('click', () => quill.history
 document.getElementById('btnHr').addEventListener('click', () => {{
   const range = quill.getSelection(true) || {{ index: quill.getLength() }};
   quill.clipboard.dangerouslyPasteHTML(range.index, '<p><hr/></p>');
+  toast('已插入分割线');
 }});
 
-// 表格（基础2x2）
-document.getElementById('btnTable').addEventListener('click', () => {{
-  const range = quill.getSelection(true) || {{ index: quill.getLength() }};
-  const table = `
-    <table style="border-collapse:collapse;width:100%;margin:10px 0;">
-      <tr>
-        <td style="border:1px solid #ccc;padding:8px;">单元格</td>
-        <td style="border:1px solid #ccc;padding:8px;">单元格</td>
-      </tr>
-      <tr>
-        <td style="border:1px solid #ccc;padding:8px;">单元格</td>
-        <td style="border:1px solid #ccc;padding:8px;">单元格</td>
-      </tr>
-    </table><p></p>`;
-  quill.clipboard.dangerouslyPasteHTML(range.index, table);
-}});
+// ===== 字号输入框：10-50px 应用到当前选择（或当前光标处） =====
+const fontSizeInput = document.getElementById('fontSizeInput');
+function clampSize(n) {{
+  n = parseInt(n || '17', 10);
+  if (isNaN(n)) n = 17;
+  if (n < 10) n = 10;
+  if (n > 50) n = 50;
+  return n;
+}}
+function applySizeFromInput() {{
+  const n = clampSize(fontSizeInput.value);
+  fontSizeInput.value = String(n);
+  const range = quill.getSelection(true) || {{ index: quill.getLength(), length: 0 }};
+  quill.setSelection(range.index, range.length, 'silent');
+  quill.format('size', n + 'px');
+  saveLocal();
+}}
+fontSizeInput.addEventListener('change', applySizeFromInput);
+fontSizeInput.addEventListener('blur', applySizeFromInput);
 
-// 表情（基础）
+// ===== 表情库：120+ 面板点选 =====
+const EMOJIS = [
+  '😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','😘','🥰','😗','😙','😚','🙂','🤗',
+  '🤩','🤔','🫡','🤨','😐','😑','😶','🫥','😶‍🌫️','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','🥱','😴',
+  '😌','😛','😜','😝','🤤','😒','😓','😔','😕','🫤','🙃','🫠','🤑','😲','☹️','🙁','😖','😞','😟','😤',
+  '😢','😭','😦','😧','😨','😩','😬','😰','😱','🥵','🥶','😳','🤯','😡','😠','🤬','😷','🤒','🤕','🤢',
+  '🤮','🤧','😇','🥳','🥺','🫶','❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','💕','💞','💓','💗',
+  '✅','☑️','✔️','✳️','⭐','🌟','🔥','💥','💯','📌','📍','🧠','🧩','📈','📊','📝','📚','🎯','⚡','🔒',
+  '👍','👎','👏','🙌','🤝','👊','✊','🤞','✌️','👌','🙏','💪','🫰','🧿','🧧','🎁','🎉','🏆','🥇','🥈',
+  '🥉','🚀','🛰️','🌈','☀️','🌙','⭐️','🌊','🍀','🌻','🌸','🍎','🍵','☕','🥗','🍜','🍣','🍰','🎵','🎬'
+];
+
+// 建面板
+const emojiGrid = document.getElementById('emojiGrid');
+function buildEmojiGrid() {{
+  emojiGrid.innerHTML = '';
+  EMOJIS.forEach(e => {{
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = e;
+    b.style.cursor = 'pointer';
+    b.style.border = '1px solid rgba(0,0,0,0.08)';
+    b.style.background = '#fff';
+    b.style.borderRadius = '10px';
+    b.style.padding = '6px 0';
+    b.style.fontSize = '18px';
+    b.addEventListener('click', () => {{
+      const range = quill.getSelection(true) || {{ index: quill.getLength(), length: 0 }};
+      quill.insertText(range.index, e);
+      quill.setSelection(range.index + 2, 0);
+      saveLocal();
+    }});
+    emojiGrid.appendChild(b);
+  }});
+}}
+buildEmojiGrid();
+
+const emojiPanel = document.getElementById('emojiPanel');
 document.getElementById('btnEmoji').addEventListener('click', () => {{
-  const emojis = ['😀','😁','😂','🥹','😊','😍','👍','🔥','✅','⭐','📌','🧠'];
-  const pick = prompt('输入序号选择表情：\\n' + emojis.map((e,i)=>`${{i+1}}. ${{e}}`).join('\\n'));
-  const n = parseInt(pick||'');
-  if (!n || n<1 || n>emojis.length) return;
-  const range = quill.getSelection(true) || {{ index: quill.getLength() }};
-  quill.insertText(range.index, emojis[n-1]);
+  emojiPanel.style.display = (emojiPanel.style.display === 'none' || !emojiPanel.style.display) ? 'block' : 'none';
+}});
+document.getElementById('emojiClose').addEventListener('click', () => {{
+  emojiPanel.style.display = 'none';
 }});
 
-// 一键排版：默认公众号风格 + 自动识别“01.”和“【推荐爆款标题】”
+// ===== 字体/字号默认值保持一致（新输入也能用） =====
+function getFontFamilyByKey(key) {{
+  const map = {{
+    wechat: '-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,"Microsoft YaHei",sans-serif',
+    simsun: 'SimSun,宋体,serif',
+    simhei: 'SimHei,黑体,sans-serif',
+    yahei: '"Microsoft YaHei","微软雅黑",sans-serif',
+    pingfang: '"PingFang SC","苹方",-apple-system,BlinkMacSystemFont,sans-serif',
+    kaiti: 'KaiTi,楷体,serif',
+    fangsong: 'FangSong,仿宋,serif',
+    arial: 'Arial,sans-serif',
+    helvetica: 'Helvetica,Arial,sans-serif',
+    times: '"Times New Roman",Times,serif',
+    georgia: 'Georgia,serif',
+    courier: '"Courier New",Courier,monospace',
+    monospace: 'ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'
+  }};
+  return map[key] || map.wechat;
+}}
+
+function getToolbarFontKey() {{
+  const sel = document.querySelector('#toolbar .ql-font');
+  const v = (sel && sel.value) ? sel.value : 'wechat';
+  return v;
+}}
+
+function getToolbarSizePx() {{
+  return clampSize(fontSizeInput.value);
+}}
+
+// ===== 一键排版：默认公众号风格 + 自动识别“01.”和“【推荐爆款标题】” =====
 function applyWechatLayout() {{
   const root = getEditorRoot();
   if (!root) return;
 
-  root.style.fontFamily = 'SimSun,宋体,serif';
-  root.style.fontSize = '17px';
+  const fontKey = getToolbarFontKey();
+  const baseSize = getToolbarSizePx();
+
+  root.style.fontFamily = getFontFamilyByKey(fontKey);
+  root.style.fontSize = baseSize + 'px';
   root.style.lineHeight = '2';
   root.style.color = '#000';
 
   root.querySelectorAll('p').forEach(p => {{
     p.style.margin = '0 0 14px 0';
-    p.style.fontFamily = 'SimSun,宋体,serif';
-    p.style.fontSize = '17px';
+    p.style.fontFamily = getFontFamilyByKey(fontKey);
+    p.style.fontSize = baseSize + 'px';
     p.style.lineHeight = '2';
     p.style.color = '#000';
   }});
@@ -541,7 +705,7 @@ function applyWechatLayout() {{
       const h2 = document.createElement('h2');
       h2.innerText = t;
       h2.style.fontFamily = 'SimHei,黑体,sans-serif';
-      h2.style.fontSize = '18px';
+      h2.style.fontSize = (Math.max(16, Math.min(22, baseSize + 1))) + 'px';
       h2.style.fontWeight = '800';
       h2.style.margin = '18px 0 8px 0';
       h2.style.borderLeft = '5px solid #07c160';
@@ -552,26 +716,29 @@ function applyWechatLayout() {{
   }});
 
   saveLocal();
-  alert('已应用公众号排版');
+  toast('已应用公众号排版');
 }}
 document.getElementById('btnApply').addEventListener('click', applyWechatLayout);
 
-// 复制富文本（带 inline 样式）
+// ===== 复制富文本（带 inline 样式） =====
 async function copyRichAll() {{
   const root = getEditorRoot();
   if (!root) return;
 
+  const fontKey = getToolbarFontKey();
+  const baseSize = getToolbarSizePx();
+
   const clone = root.cloneNode(true);
   clone.querySelectorAll('p').forEach(p => {{
     p.style.margin = '0 0 14px 0';
-    p.style.fontFamily = 'SimSun,宋体,serif';
-    p.style.fontSize = '17px';
+    p.style.fontFamily = getFontFamilyByKey(fontKey);
+    p.style.fontSize = baseSize + 'px';
     p.style.lineHeight = '2';
     p.style.color = '#000';
   }});
   clone.querySelectorAll('h2').forEach(h2 => {{
     h2.style.fontFamily = 'SimHei,黑体,sans-serif';
-    h2.style.fontSize = '18px';
+    h2.style.fontSize = (Math.max(16, Math.min(22, baseSize + 1))) + 'px';
     h2.style.fontWeight = '800';
     h2.style.margin = '18px 0 8px 0';
     h2.style.borderLeft = '5px solid #07c160';
@@ -579,7 +746,7 @@ async function copyRichAll() {{
     h2.style.color = '#000';
   }});
 
-  const htmlText = `<div style="font-family:SimSun,宋体,serif;font-size:17px;line-height:2;color:#000;">${{clone.innerHTML}}</div>`;
+  const htmlText = `<div style="font-family:${{getFontFamilyByKey(fontKey)}};font-size:${{baseSize}}px;line-height:2;color:#000;">${{clone.innerHTML}}</div>`;
   const plainText = root.innerText || '';
 
   try {{
@@ -588,7 +755,7 @@ async function copyRichAll() {{
       const textBlob = new Blob([plainText], {{ type: "text/plain" }});
       const item = new ClipboardItem({{ "text/html": htmlBlob, "text/plain": textBlob }});
       await navigator.clipboard.write([item]);
-      alert("已复制（富文本，保留样式）");
+      toast("已复制富文本");
       return;
     }}
   }} catch(e) {{}}
@@ -609,14 +776,14 @@ async function copyRichAll() {{
     document.execCommand('copy');
     sel.removeAllRanges();
     document.body.removeChild(temp);
-    alert("已复制（富文本，保留样式）");
+    toast("已复制富文本");
   }} catch(e) {{
-    alert("复制失败：请使用 HTTPS 或更换浏览器");
+    toast("复制失败：请使用 HTTPS 或更换浏览器");
   }}
 }}
 document.getElementById('btnCopyRich').addEventListener('click', copyRichAll);
 
-// 复制 Markdown（HTML -> Markdown）
+// ===== 复制 Markdown（HTML -> Markdown） =====
 async function copyMarkdownAll() {{
   const root = getEditorRoot();
   if (!root) return;
@@ -636,7 +803,7 @@ async function copyMarkdownAll() {{
 
   try {{
     await navigator.clipboard.writeText(md);
-    alert("已复制 Markdown");
+    toast("已复制 Markdown");
   }} catch(e) {{
     const el = document.createElement("textarea");
     el.value = md;
@@ -644,20 +811,21 @@ async function copyMarkdownAll() {{
     el.select();
     document.execCommand('copy');
     document.body.removeChild(el);
-    alert("已复制 Markdown");
+    toast("已复制 Markdown");
   }}
 }}
 document.getElementById('btnCopyMd').addEventListener('click', copyMarkdownAll);
 
-// 清空
+// ===== 清空 =====
 document.getElementById('btnClear').addEventListener('click', () => {{
   if (!confirm("确定清空编辑器内容？")) return;
   quill.setText('');
   localStorage.setItem(KEY_HTML, '');
   localStorage.setItem(KEY_VER, VERSION);
+  toast('已清空');
 }});
 </script>
-""", height=860)
+""", height=900, scrolling=True)
 
 # =============================
 # 8) UI Tabs
@@ -809,4 +977,3 @@ with tab_manual:
 if st.session_state.jump_to_editor:
     st.session_state.jump_to_editor = False
     jump_to_tab_by_text("手动排版")
-
