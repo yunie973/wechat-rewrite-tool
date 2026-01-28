@@ -5,19 +5,20 @@ import json  # ✅ 必须
 from bs4 import BeautifulSoup
 import re
 import html
+import time
 
 # -----------------------------
 # 1) UI：微信绿 + 白底黑字
 # -----------------------------
-st.set_page_config(page_title="文章二创助手", layout="centered")
+st.set_page_config(page_title="高级原创二创助手", layout="centered")
 
 st.markdown("""
 <style>
 .stApp { background-color: #ffffff; color: #000000 !important; }
 h1 { color: #07c160 !important; font-family: "Microsoft YaHei"; text-align: center; font-weight: bold; }
 
-.stTextInput input { color: #000000 !important; font-weight: bold !important; }
-.stTextInput > div > div { border: 2px solid #07c160 !important; }
+.stTextInput input { color: #000000 !important; font-weight: 700 !important; }
+.stTextInput > div > div { border: 2px solid #07c160 !important; border-radius: 12px !important; }
 
 /* 细滚动条（更像微信） */
 .scrollbox::-webkit-scrollbar { width: 8px; }
@@ -67,15 +68,15 @@ div.stButton > button:disabled { background-color: #9be4be !important; color: #f
 </div>
 """, unsafe_allow_html=True)
 
-st.title("文章深度重构工作台")
+st.title("🛡️ 深度重构级专业工作台")
 
 # -----------------------------
-# 2) session_state（必须在 import 之后）
+# 2) session_state（必须在 import 后）
 # -----------------------------
 if "is_generating" not in st.session_state:
     st.session_state.is_generating = False
 
-# 保存“上一次结果”，生成完恢复初始状态，但内容保留到下一次生成覆盖
+# 保留“上一次结果”，下一次生成完成再覆盖
 if "result_md" not in st.session_state:
     st.session_state.result_md = None
 if "result_plain" not in st.session_state:
@@ -83,9 +84,13 @@ if "result_plain" not in st.session_state:
 if "result_rich_html" not in st.session_state:
     st.session_state.result_rich_html = None
 
+# 手动原文输入缓存
+if "manual_text" not in st.session_state:
+    st.session_state.manual_text = ""
+
 
 # -----------------------------
-# 3) 文本处理
+# 3) 文本处理（更稳：只替换“不是…而是…”句式，不全局替换词）
 # -----------------------------
 def format_title_block(text: str) -> str:
     """强制【推荐爆款标题】后标题每行一个；标题区后空三行；不乱动正常标点。"""
@@ -120,14 +125,29 @@ def format_title_block(text: str) -> str:
     return text[:text.find(marker)] + fixed + rest.lstrip("\n")
 
 
+def replace_bushi_ershi(text: str) -> str:
+    """
+    仅替换命中的“不是…而是…”句式，避免误伤所有“不是/而是”。
+    """
+    # 限制两段之间不要跨很长（避免误替换）
+    pattern = re.compile(r"不是(?P<a>.{0,60}?)而是", flags=re.DOTALL)
+
+    def _repl(m):
+        a = m.group("a")
+        # 尽量保留原有标点结构
+        return "不单是" + a + "更是"
+
+    return pattern.sub(_repl, text)
+
+
 def safety_filter(text: str) -> str:
     """禁令拦截 + 结构修正（不删正常标点，只处理破折号字符）。"""
     text = text.replace("\\n", "\n")
 
-    # 按你原逻辑
-    text = text.replace("不是", "不单是").replace("而是", "更是")
+    # 禁令句式：更稳的正则替换
+    text = replace_bushi_ershi(text)
 
-    # 禁用破折号字符
+    # 禁用破折号字符（只处理破折号本体）
     text = text.replace("——", " ").replace("—", " ")
 
     # 小标题前空行
@@ -180,17 +200,22 @@ def build_rich_html(plain_text: str) -> str:
 
 
 # -----------------------------
-# 4) 抓取 & DeepSeek 流式
+# 4) 抓取（加缓存） & DeepSeek 流式
 # -----------------------------
-def get_article_content(url: str):
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"}
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        content_div = soup.find('div', id='js_content')
-        return content_div.get_text(separator='\n', strip=True) if content_div else None
-    except:
-        return None
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_article_content_cached(url: str):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)",
+        "Accept-Language": "zh-CN,zh;q=0.9"
+    }
+    res = requests.get(url, headers=headers, timeout=12)
+    return res.status_code, res.text
+
+
+def extract_wechat_text(html_text: str):
+    soup = BeautifulSoup(html_text, "html.parser")
+    content_div = soup.find("div", id="js_content")
+    return content_div.get_text(separator="\n", strip=True) if content_div else None
 
 
 def stream_ai_rewrite(text: str, api_key: str):
@@ -217,7 +242,8 @@ def stream_ai_rewrite(text: str, api_key: str):
         "temperature": 0.8
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    return requests.post(url, headers=headers, json=payload, stream=True)
+    # 不要在这里 try/except 吃掉错误，外层要能报出来
+    return requests.post(url, headers=headers, json=payload, stream=True, timeout=120)
 
 
 # -----------------------------
@@ -345,20 +371,29 @@ document.getElementById("copyBtnMd").addEventListener("click", copyMd);
 
 
 # -----------------------------
-# 6) 页面逻辑
+# 6) 页面：输入 + 手动原文兜底
 # -----------------------------
 target_url = st.text_input("🔗 粘贴链接开始深度重构")
 
-# 按钮：开始生成 / 正在生成中...
+with st.expander("抓取失败？这里可手动粘贴原文继续生成（可选）", expanded=False):
+    st.session_state.manual_text = st.text_area(
+        "📄 粘贴原文（抓不到链接时会自动用这里的内容）",
+        value=st.session_state.manual_text,
+        height=180,
+        placeholder="当公众号链接抓取失败（403/空内容）时，把文章原文粘贴到这里再点“开始生成”。"
+    )
+
+# -----------------------------
+# 7) 按钮：开始生成 / 正在生成中...
+# -----------------------------
 btn_text = "正在生成中..." if st.session_state.is_generating else "开始生成"
 clicked = st.button(btn_text, disabled=st.session_state.is_generating, key="gen_btn")
 
-# 点击后：立刻切换状态并 rerun，让按钮马上变“正在生成中...”
 if clicked and not st.session_state.is_generating:
     st.session_state.is_generating = True
     st.rerun()
 
-# ✅ 非生成状态：显示“上一次结果”（直到下一次生成完成覆盖）
+# ✅ 非生成状态：显示上一次结果（直到下一次生成覆盖）
 if (not st.session_state.is_generating) and st.session_state.result_md:
     st.subheader("🖨️ 1) 一键复制：保留字体字号（富文本）")
     render_block_with_copy_rich(
@@ -375,58 +410,101 @@ if (not st.session_state.is_generating) and st.session_state.result_md:
         height_px=520
     )
 
-# ✅ 生成中：执行生成流程（生成完成后恢复初始状态，但保留结果供复制）
+# -----------------------------
+# 8) 生成流程（强兜底：异常一定会恢复按钮状态）
+# -----------------------------
 if st.session_state.is_generating:
-    api_key = st.secrets.get("DEEPSEEK_API_KEY")
+    try:
+        api_key = st.secrets.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            st.error("未检测到 DEEPSEEK_API_KEY，请在 .streamlit/secrets.toml 配置。")
+            st.session_state.is_generating = False
+            st.stop()
 
-    if not target_url:
-        st.error("请先粘贴链接。")
+        source_text = None
+        fetch_hint = ""
+
+        # 优先：URL 抓取
+        if target_url.strip():
+            with st.spinner("正在抓取文章内容…"):
+                status_code, page_html = get_article_content_cached(target_url.strip())
+            if status_code == 200:
+                source_text = extract_wechat_text(page_html)
+                if not source_text:
+                    fetch_hint = "（已获取页面，但未找到正文区域 js_content）"
+            else:
+                fetch_hint = f"（抓取失败 HTTP {status_code}）"
+
+        # 兜底：手动粘贴
+        if not source_text:
+            manual = (st.session_state.manual_text or "").strip()
+            if manual:
+                source_text = manual
+                st.warning(f"链接抓取不可用{fetch_hint}，已改用“手动粘贴原文”生成。")
+            else:
+                st.error(f"内容抓取失败{fetch_hint}，且未提供手动原文。请粘贴原文后再生成。")
+                st.session_state.is_generating = False
+                st.stop()
+
+        st.info("正在生成中，请稍候…")
+
+        full_content = ""
+        placeholder = st.empty()
+        progress = st.empty()
+
+        response = stream_ai_rewrite(source_text, api_key)
+
+        if response.status_code != 200:
+            # 尽量给出可读信息（不泄露 key）
+            msg = response.text[:300] if response.text else ""
+            st.error(f"模型接口请求失败：HTTP {response.status_code}\n\n{msg}")
+            st.session_state.is_generating = False
+            st.stop()
+
+        last_render_len = 0
+        last_tick = time.time()
+
+        for line in response.iter_lines():
+            if not line:
+                continue
+            chunk = line.decode("utf-8", errors="ignore").removeprefix("data: ").strip()
+            if chunk == "[DONE]":
+                break
+            try:
+                data = json.loads(chunk)
+                delta = data["choices"][0]["delta"].get("content", "")
+                if not delta:
+                    continue
+                full_content += delta
+
+                # 节流：每 60 字或 0.25s 刷新一次，流畅且省渲染
+                now = time.time()
+                if (len(full_content) - last_render_len >= 60) or (now - last_tick >= 0.25):
+                    last_render_len = len(full_content)
+                    last_tick = now
+                    progress.caption(f"已生成约 {len(full_content)} 字…")
+                    placeholder.markdown(safety_filter(full_content) + "▌")
+            except:
+                continue
+
+        progress.empty()
+        placeholder.empty()
+
+        md_final = safety_filter(full_content)
+        plain_final = to_plain_text(md_final)
+        rich_html_out = build_rich_html(plain_final)
+
+        st.session_state.result_md = md_final
+        st.session_state.result_plain = plain_final
+        st.session_state.result_rich_html = rich_html_out
+
+    except requests.exceptions.Timeout:
+        st.error("请求超时：可能是网络不稳定或接口响应慢。请稍后重试。")
+    except requests.exceptions.RequestException as e:
+        st.error(f"网络请求异常：{e}")
+    except Exception as e:
+        st.error(f"发生未知错误：{e}")
+    finally:
+        # ✅ 一定恢复初始状态（按钮回“开始生成”），结果保留等待下一次覆盖
         st.session_state.is_generating = False
         st.rerun()
-
-    if not api_key:
-        st.error("未检测到 DEEPSEEK_API_KEY，请在 .streamlit/secrets.toml 配置。")
-        st.session_state.is_generating = False
-        st.rerun()
-
-    raw_text = get_article_content(target_url)
-    if not raw_text:
-        st.error("内容抓取失败")
-        st.session_state.is_generating = False
-        st.rerun()
-
-    st.info("正在生成中，请稍候…")
-
-    full_content = ""
-    placeholder = st.empty()
-
-    response = stream_ai_rewrite(raw_text, api_key)
-
-    for line in response.iter_lines():
-        if not line:
-            continue
-        chunk = line.decode('utf-8', errors='ignore').removeprefix('data: ').strip()
-        if chunk == "[DONE]":
-            break
-        try:
-            data = json.loads(chunk)
-            full_content += data["choices"][0]["delta"].get("content", "")
-            placeholder.markdown(safety_filter(full_content) + "▌")
-        except:
-            continue
-
-    placeholder.empty()
-
-    # ✅ 生成完成：覆盖写入 session_state（下一次生成才会再替换）
-    md_final = safety_filter(full_content)
-    plain_final = to_plain_text(md_final)
-    rich_html_out = build_rich_html(plain_final)
-
-    st.session_state.result_md = md_final
-    st.session_state.result_plain = plain_final
-    st.session_state.result_rich_html = rich_html_out
-
-    # ✅ 恢复初始状态：按钮回“开始生成”，结果保留展示
-    st.session_state.is_generating = False
-    st.rerun()
-
