@@ -1,5 +1,5 @@
 import streamlit as st
-import streamlit.components.v1 as components  # ✅ 必须
+import streamlit.components.v1 as components
 import requests
 import json
 from bs4 import BeautifulSoup
@@ -8,67 +8,101 @@ import html
 import time
 
 # =============================
-# 1) UI：微信绿 + 白底黑字
+# 1) UI：微信绿 + 强制浅色 + 手机自适配
 # =============================
 st.set_page_config(page_title="高级原创二创助手", layout="centered")
 
 st.markdown("""
 <style>
-.stApp { background-color: #ffffff; color: #000000 !important; }
-h1 { color: #07c160 !important; font-family: "Microsoft YaHei"; text-align: center; font-weight: bold; }
+/* ========== 强制浅色：不受系统深色影响 ========== */
+:root, body, .stApp { color-scheme: light !important; }
+.stApp { background-color: #ffffff !important; color: #000000 !important; padding-bottom: 90px; }
 
-.stTextInput input { color: #000000 !important; font-weight: 700 !important; }
-.stTextInput > div > div { border: 2px solid #07c160 !important; border-radius: 12px !important; }
+/* 标题 */
+h1 { color: #07c160 !important; font-family: "Microsoft YaHei"; text-align: center; font-weight: 900; }
 
-/* 细滚动条（更像微信） */
-.scrollbox::-webkit-scrollbar { width: 8px; }
-.scrollbox::-webkit-scrollbar-thumb { background: #bdeed6; border-radius: 10px; }
-.scrollbox::-webkit-scrollbar-track { background: #f6fffa; }
+/* 输入框：白底黑字绿边 */
+.stTextInput > div > div {
+  border: 2px solid #07c160 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+}
+.stTextInput input {
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
+div[data-baseweb="input"] { background: #ffffff !important; }
+
+/* 下拉选择：白底黑字（避免深色系统发黑） */
+div[data-baseweb="select"] > div {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(7,193,96,0.45) !important;
+}
+
+/* Slider 文案颜色 */
+div[data-baseweb="slider"] * { color: #000000 !important; }
 
 /* 绿色按钮（覆盖 Streamlit 默认） */
 div.stButton > button {
-    background-color: #07c160 !important;
-    color: #ffffff !important;
-    border: none !important;
-    border-radius: 10px !important;
-    font-weight: 800 !important;
-    height: 46px !important;
-    width: 100% !important;
+  background-color: #07c160 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  font-weight: 900 !important;
+  height: 46px !important;
+  width: 100% !important;
 }
 div.stButton > button:hover { background-color: #06b457 !important; }
 div.stButton > button:disabled { background-color: #9be4be !important; color: #ffffff !important; }
 
 /* 页脚与二维码 */
 .footer {
-    position: fixed; left: 0; bottom: 0; width: 100%;
-    background-color: white; padding: 12px 0; border-top: 2px solid #07c160;
-    z-index: 999; display: flex; justify-content: center; align-items: center; gap: 20px;
+  position: fixed; left: 0; bottom: 0; width: 100%;
+  background-color: #ffffff; padding: 12px 0; border-top: 2px solid #07c160;
+  z-index: 999; display: flex; justify-content: center; align-items: center; gap: 20px;
 }
-.qr-item { color: #07c160; font-weight: bold; cursor: pointer; position: relative; }
+.qr-item { color: #07c160; font-weight: 900; cursor: pointer; position: relative; }
 .qr-box {
-    display: none; position: absolute; bottom: 45px; left: 50%;
-    transform: translateX(-50%); width: 180px; background: white;
-    padding: 10px; border: 2px solid #07c160; border-radius: 10px; box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+  display: none; position: absolute; bottom: 45px; left: 50%;
+  transform: translateX(-50%); width: 180px; background: white;
+  padding: 10px; border: 2px solid #07c160; border-radius: 10px; box-shadow: 0 8px 25px rgba(0,0,0,0.2);
 }
 .qr-item:hover .qr-box { display: block; }
+
+/* ========== 手机端自适配 ========== */
+@media (max-width: 768px) {
+  h1 { font-size: 26px !important; }
+  .stTextInput input { font-size: 16px !important; }
+  div.stButton > button { height: 50px !important; border-radius: 12px !important; }
+  .stApp { padding-bottom: 20px !important; }
+
+  /* 手机端 footer 不固定，避免遮挡内容 */
+  .footer {
+    position: relative !important;
+    border-top: 1px solid rgba(7,193,96,0.35) !important;
+    padding: 10px 0 !important;
+    gap: 12px !important;
+  }
+  .qr-box { width: 150px !important; }
+}
 </style>
 
 <div class="footer">
-    <span style="color:#000;">© 2026 <b>@兴洪</b> 版权所有</span>
-    <div class="qr-item">📗 微信加我
-        <div class="qr-box">
-            <img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%;">
-        </div>
-    </div>
-    <div class="qr-item">🪐 知识星球
-        <div class="qr-box">
-            <img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;">
-        </div>
-    </div>
+  <span style="color:#000;">© 2026 <b>@兴洪</b> 版权所有</span>
+  <div class="qr-item">📗 微信加我
+    <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%;"></div>
+  </div>
+  <div class="qr-item">🪐 知识星球
+    <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;"></div>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
 st.title("🛡️ 深度重构级专业工作台")
+
 
 # =============================
 # 2) session_state
@@ -76,7 +110,6 @@ st.title("🛡️ 深度重构级专业工作台")
 if "is_generating" not in st.session_state:
     st.session_state.is_generating = False
 
-# 上一次结果：下一次生成完成才覆盖
 if "result_md" not in st.session_state:
     st.session_state.result_md = None
 if "result_plain" not in st.session_state:
@@ -84,28 +117,24 @@ if "result_plain" not in st.session_state:
 if "result_rich_html" not in st.session_state:
     st.session_state.result_rich_html = None
 
-# 记住上一次“原文”，用于“再生成一次”
 if "last_source_text" not in st.session_state:
     st.session_state.last_source_text = None
 if "last_source_hint" not in st.session_state:
-    st.session_state.last_source_hint = None  # 例如“来自链接/手动粘贴”
+    st.session_state.last_source_hint = None
 if "use_last_source" not in st.session_state:
     st.session_state.use_last_source = False
 
-# 手动原文兜底
 if "manual_text" not in st.session_state:
     st.session_state.manual_text = ""
 
-# 上一次错误（防止 rerun 后错误消失）
 if "last_error" not in st.session_state:
     st.session_state.last_error = None
 
 
 # =============================
-# 3) 文本处理（更稳：只替换命中句式）
+# 3) 文本处理
 # =============================
 def format_title_block(text: str) -> str:
-    """强制【推荐爆款标题】后标题每行一个；标题区后空三行；不乱动正常标点。"""
     marker = "【推荐爆款标题】"
     if marker not in text:
         return text
@@ -126,7 +155,7 @@ def format_title_block(text: str) -> str:
 
     raw_lines = [ln.strip() for ln in title_block.split("\n") if ln.strip()]
 
-    # 如果挤成一行，仅用 ;；|｜/ 分隔，不动逗号顿号等标点
+    # 如果标题挤成一行，只用 ;；|｜/ 分割，不动逗号顿号等标点
     if len(raw_lines) < 5 and raw_lines:
         joined = " ".join(raw_lines)
         parts = re.split(r"(?:\s*[;；]\s*|\s*[|｜]\s*|\s*/\s*)", joined)
@@ -138,7 +167,6 @@ def format_title_block(text: str) -> str:
 
 
 def replace_bushi_ershi(text: str) -> str:
-    """仅替换命中的“不是…而是…”句式，避免误伤所有“不是/而是”"""
     pattern = re.compile(r"不是(?P<a>.{0,60}?)而是", flags=re.DOTALL)
 
     def _repl(m):
@@ -149,7 +177,6 @@ def replace_bushi_ershi(text: str) -> str:
 
 
 def safety_filter(text: str) -> str:
-    """禁令拦截 + 结构修正（不删正常标点，只处理破折号字符）。"""
     text = text.replace("\\n", "\n")
     text = replace_bushi_ershi(text)
     text = text.replace("——", " ").replace("—", " ")
@@ -158,7 +185,6 @@ def safety_filter(text: str) -> str:
 
 
 def to_plain_text(md_text: str) -> str:
-    """Markdown -> 纯文本（用于富文本骨架）"""
     t = md_text
     t = re.sub(r'^\s*##\s*', '', t, flags=re.MULTILINE)
     t = re.sub(r'\*\*(.+?)\*\*', r'\1', t)
@@ -169,15 +195,15 @@ def to_plain_text(md_text: str) -> str:
 
 
 def build_rich_html(plain_text: str) -> str:
-    """生成可粘贴保留字体字号的 HTML：小标题黑体18 / 正文宋体17"""
     lines = plain_text.split("\n")
     parts = ['<div style="font-family:SimSun,宋体,serif;font-size:17px;line-height:2;color:#000;">']
+
     for ln in lines:
         if ln.strip() == "":
             parts.append("<p><br/></p>")
             continue
 
-        # 小标题：01. XXX（去掉 markdown 的 ## 之后，行首是 01.）
+        # 小标题：01. XXX
         if re.match(r'^\s*0[1-4]\.\s*.+\s*$', ln):
             parts.append(
                 f'<p style="margin:18px 0 8px 0;font-family:SimHei,黑体,sans-serif;'
@@ -199,11 +225,11 @@ def build_rich_html(plain_text: str) -> str:
 
 
 # =============================
-# 4) 抓取（更稳：识别验证页 + 多UA重试 + 缓存）
+# 4) 抓取（识别验证页 + 多 UA 重试 + 缓存）
 # =============================
 VERIFY_KEYWORDS = [
     "环境异常", "访问过于频繁", "请在微信客户端打开",
-    "请输入验证码", "安全验证", "验证后继续", "Weixin",
+    "请输入验证码", "安全验证", "验证后继续",
 ]
 
 UA_LIST = [
@@ -218,23 +244,21 @@ def fetch_page_cached(url: str, ua_idx: int):
     res = requests.get(url, headers=headers, timeout=12)
     return res.status_code, res.text
 
+
 def looks_like_verify_page(page_html: str) -> bool:
     if not page_html:
         return True
-    s = page_html[:20000]  # 前面内容足够判断
+    s = page_html[:20000]
     return any(k in s for k in VERIFY_KEYWORDS)
+
 
 def extract_wechat_text(page_html: str):
     soup = BeautifulSoup(page_html, "html.parser")
     content_div = soup.find("div", id="js_content")
     return content_div.get_text(separator="\n", strip=True) if content_div else None
 
+
 def get_article_text_smart(url: str):
-    """
-    返回：(text, hint)
-    text: 成功时正文，失败时 None
-    hint: 可读原因
-    """
     last_hint = None
     for attempt, ua_idx in enumerate([0, 1, 2], start=1):
         try:
@@ -252,24 +276,21 @@ def get_article_text_smart(url: str):
             return text, "来自链接抓取"
         except requests.exceptions.Timeout:
             last_hint = f"抓取超时（第{attempt}次尝试）"
-            continue
         except requests.exceptions.RequestException as e:
             last_hint = f"抓取网络错误：{e}（第{attempt}次尝试）"
-            continue
-
     return None, (last_hint or "抓取失败")
 
 
 # =============================
-# 5) DeepSeek 流式（加入温度/篇幅）
+# 5) DeepSeek 流式（温度/篇幅）
 # =============================
 def length_to_max_tokens(length_mode: str) -> int:
-    # 你可以按成本再调
     if length_mode == "短":
         return 1200
     if length_mode == "长":
         return 2600
-    return 1800  # 中
+    return 1800
+
 
 def length_to_hint(length_mode: str) -> str:
     if length_mode == "短":
@@ -278,9 +299,9 @@ def length_to_hint(length_mode: str) -> str:
         return "正文更充分展开，增加细节与案例，控制在约1800-2400字。"
     return "正文适中展开，控制在约1200-1800字。"
 
+
 def stream_ai_rewrite(text: str, api_key: str, temperature: float, length_mode: str):
     url = "https://api.deepseek.com/chat/completions"
-
     system_prompt = f"""假设你是一个专业的自媒体作家。对下文进行二创。
 【原创加强建议】：句型词汇调整、内容拓展、避免关键词、结构逻辑调整、视角切换、重点聚焦、角度转换、避免直接引用。
 【核心禁令】：
@@ -294,7 +315,6 @@ def stream_ai_rewrite(text: str, api_key: str, temperature: float, length_mode: 
 4. 小标题格式固定为 ## 01. XXX，总数控制在 2-4 个。
 【篇幅要求】：{length_to_hint(length_mode)}
 """
-
     payload = {
         "model": "deepseek-chat",
         "messages": [
@@ -310,9 +330,14 @@ def stream_ai_rewrite(text: str, api_key: str, temperature: float, length_mode: 
 
 
 # =============================
-# 6) 输出：可滚动容器 + 右上角复制（JS 花括号已转义 {{ }}）
+# 6) 输出组件：高度自动适配（clamp）
+#    手机：360~420  左右；桌面：520~640 左右
 # =============================
-def render_block_with_copy_rich(rich_html: str, plain_fallback: str, title: str, height_px: int = 520):
+SCROLLBOX_HEIGHT_CSS = "clamp(360px, 60vh, 640px)"  # ✅ 核心：自动适配
+IFRAME_HEIGHT = 820  # iframe 高度留够（内部滚动区自动控制）
+
+
+def render_block_with_copy_rich(rich_html: str, plain_fallback: str, title: str):
     rich_js = json.dumps(rich_html)
     plain_js = json.dumps(plain_fallback)
     title_esc = html.escape(title)
@@ -320,16 +345,21 @@ def render_block_with_copy_rich(rich_html: str, plain_fallback: str, title: str,
     components.html(f"""
 <div style="border:1px solid #07c160;border-radius:10px;background:#fff;padding:14px;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-    <div style="font-weight:800;color:#000;font-family:Microsoft YaHei;">{title_esc}</div>
+    <div style="font-weight:900;color:#000;font-family:Microsoft YaHei;">{title_esc}</div>
 
     <button id="copyBtn"
       style="background:#07c160;color:#fff;border:none;border-radius:8px;
-             padding:8px 12px;cursor:pointer;font-weight:800;flex-shrink:0;">
+             padding:8px 12px;cursor:pointer;font-weight:900;flex-shrink:0;">
       📋 复制
     </button>
   </div>
 
-  <div class="scrollbox" style="height:{height_px}px; overflow-y:auto; padding-right:6px;">
+  <div class="scrollbox" style="height:{SCROLLBOX_HEIGHT_CSS}; overflow-y:auto; padding-right:6px;">
+    <style>
+      .scrollbox::-webkit-scrollbar {{ width: 8px; }}
+      .scrollbox::-webkit-scrollbar-thumb {{ background: #bdeed6; border-radius: 10px; }}
+      .scrollbox::-webkit-scrollbar-track {{ background: #f6fffa; }}
+    </style>
     {rich_html}
   </div>
 </div>
@@ -385,10 +415,10 @@ async function copyRich(){{
 
 document.getElementById("copyBtn").addEventListener("click", copyRich);
 </script>
-""", height=height_px + 120)
+""", height=IFRAME_HEIGHT)
 
 
-def render_block_with_copy_markdown(md_text: str, title: str, height_px: int = 520):
+def render_block_with_copy_markdown(md_text: str, title: str):
     md_esc = html.escape(md_text)
     md_js = json.dumps(md_text)
     title_esc = html.escape(title)
@@ -396,16 +426,22 @@ def render_block_with_copy_markdown(md_text: str, title: str, height_px: int = 5
     components.html(f"""
 <div style="border:1px solid #07c160;border-radius:10px;background:#fff;padding:14px;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-    <div style="font-weight:800;color:#000;font-family:Microsoft YaHei;">{title_esc}</div>
+    <div style="font-weight:900;color:#000;font-family:Microsoft YaHei;">{title_esc}</div>
 
     <button id="copyBtnMd"
       style="background:#07c160;color:#fff;border:none;border-radius:8px;
-             padding:8px 12px;cursor:pointer;font-weight:800;flex-shrink:0;">
+             padding:8px 12px;cursor:pointer;font-weight:900;flex-shrink:0;">
       📋 复制
     </button>
   </div>
 
-  <div class="scrollbox" style="height:{height_px}px; overflow-y:auto; padding-right:6px;">
+  <div class="scrollbox" style="height:{SCROLLBOX_HEIGHT_CSS}; overflow-y:auto; padding-right:6px;">
+    <style>
+      .scrollbox::-webkit-scrollbar {{ width: 8px; }}
+      .scrollbox::-webkit-scrollbar-thumb {{ background: #bdeed6; border-radius: 10px; }}
+      .scrollbox::-webkit-scrollbar-track {{ background: #f6fffa; }}
+    </style>
+
     <pre style="margin:0;white-space:pre-wrap;line-height:1.8;font-size:14px;
                 font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;
                 background:#ffffff;border-radius:8px;">{md_esc}</pre>
@@ -430,18 +466,39 @@ async function copyMd(){{
 }}
 document.getElementById("copyBtnMd").addEventListener("click", copyMd);
 </script>
-""", height=height_px + 120)
+""", height=IFRAME_HEIGHT)
 
 
 # =============================
-# 7) 页面：输入 + 高级设置 + 手动兜底
+# 7) 页面：输入 + 高级设置（标签行）+ 手动兜底
 # =============================
 target_url = st.text_input("🔗 粘贴链接开始深度重构")
 
 with st.expander("高级设置（可选）", expanded=False):
-    temperature = st.slider("风格强度（temperature）", 0.5, 1.0, 0.8, 0.05)
-    length_mode = st.selectbox("篇幅", ["中", "短", "长"], index=0)
-    st.caption("提示：短=更精炼；长=更充分展开。")
+    st.markdown("**风格强度（temperature）**")
+    st.caption("越低越稳（更像改写/更少发散）；越高越创意（更敢改但更易跑题）")
+
+    temperature = st.slider("风格强度（建议 0.70–0.85）", 0.5, 1.0, 0.8, 0.05)
+
+    # 直观标签行
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.markdown("<div style='text-align:left;font-size:12px;color:#666;'>0.50<br><b>最稳</b></div>", unsafe_allow_html=True)
+    c2.markdown("<div style='text-align:center;font-size:12px;color:#666;'>0.65<br>稳</div>", unsafe_allow_html=True)
+    c3.markdown("<div style='text-align:center;font-size:12px;color:#666;'>0.80<br><b>推荐</b></div>", unsafe_allow_html=True)
+    c4.markdown("<div style='text-align:center;font-size:12px;color:#666;'>0.90<br>创意</div>", unsafe_allow_html=True)
+    c5.markdown("<div style='text-align:right;font-size:12px;color:#666;'>1.00<br><b>最创意</b></div>", unsafe_allow_html=True)
+
+    if temperature <= 0.65:
+        st.info("当前：偏稳 ✅ 适合严肃科普/降AI味/少发散")
+    elif temperature <= 0.85:
+        st.success("当前：均衡 ⭐ 推荐默认（稳定 + 有一定改写力度）")
+    else:
+        st.warning("当前：偏创意 ⚠️ 适合标题党/情绪化文风，但可能更容易跑题")
+
+    st.markdown("---")
+    st.markdown("**篇幅**")
+    length_mode = st.selectbox("选择输出长度", ["中", "短", "长"], index=0)
+    st.caption("短：更精炼；中：默认；长：更充分展开（更耗 tokens）")
 
 with st.expander("抓取失败？这里可手动粘贴原文继续生成（可选）", expanded=False):
     st.session_state.manual_text = st.text_area(
@@ -451,12 +508,11 @@ with st.expander("抓取失败？这里可手动粘贴原文继续生成（可�
         placeholder="当公众号链接抓取失败（验证/403/空内容）时，把文章原文粘贴到这里再点“开始生成”。"
     )
 
-# 显示上一次错误（不打断）
 if st.session_state.last_error and (not st.session_state.is_generating):
     st.error(st.session_state.last_error)
 
-# 两个按钮：开始生成 / 再生成一次（同原文，不重新抓取）
-col1, col2 = st.columns([2, 1], vertical_alignment="center")
+# 两个按钮：开始生成 / 再生成一次
+col1, col2 = st.columns([2, 1])
 with col1:
     btn_text = "正在生成中..." if st.session_state.is_generating else "开始生成"
     clicked_generate = st.button(btn_text, disabled=st.session_state.is_generating, key="gen_btn")
@@ -465,20 +521,19 @@ with col2:
     can_regen = (st.session_state.last_source_text is not None) and (not st.session_state.is_generating)
     clicked_regen = st.button("再生成一次", disabled=not can_regen, key="regen_btn")
 
-# 点击按钮：设置状态并 rerun，让按钮立即变化
 if clicked_generate and not st.session_state.is_generating:
     st.session_state.is_generating = True
     st.session_state.use_last_source = False
     st.session_state.last_error = None
     st.rerun()
 
-if clicked_regen and not st.session_state.is_generating and st.session_state.last_source_text:
+if clicked_regen and (not st.session_state.is_generating) and st.session_state.last_source_text:
     st.session_state.is_generating = True
     st.session_state.use_last_source = True
     st.session_state.last_error = None
     st.rerun()
 
-# 非生成状态：展示上一次结果（直到下一次生成覆盖）
+# 展示上一次结果
 if (not st.session_state.is_generating) and st.session_state.result_md:
     if st.session_state.last_source_hint:
         st.caption(f"上次原文：{st.session_state.last_source_hint}")
@@ -487,16 +542,15 @@ if (not st.session_state.is_generating) and st.session_state.result_md:
     render_block_with_copy_rich(
         rich_html=st.session_state.result_rich_html,
         plain_fallback=st.session_state.result_plain,
-        title="富文本成品（小标题黑体18 / 正文宋体17）",
-        height_px=520
+        title="富文本成品（小标题黑体18 / 正文宋体17）"
     )
 
     st.subheader("🧾 2) 一键复制：Markdown 原文")
     render_block_with_copy_markdown(
         md_text=st.session_state.result_md,
-        title="Markdown 原文（原样显示）",
-        height_px=520
+        title="Markdown 原文（原样显示）"
     )
+
 
 # =============================
 # 8) 生成流程
@@ -509,15 +563,15 @@ if st.session_state.is_generating:
             st.session_state.is_generating = False
             st.rerun()
 
-        # 1) 取原文：优先“再生成一次”的 last_source_text，否则尝试 URL 抓取，失败再用手动粘贴
         source_text = None
         source_hint = None
 
+        # 1) 再生成一次：直接用上一次原文
         if st.session_state.use_last_source and st.session_state.last_source_text:
             source_text = st.session_state.last_source_text
             source_hint = "来自上一次原文（再生成一次）"
         else:
-            # URL 抓取
+            # 2) URL 抓取 -> 失败用手动
             if target_url.strip():
                 with st.spinner("正在抓取文章内容…"):
                     text, hint = get_article_text_smart(target_url.strip())
@@ -525,7 +579,6 @@ if st.session_state.is_generating:
                     source_text = text
                     source_hint = hint
                 else:
-                    # 抓取失败：如果有手动原文，自动切换
                     manual = (st.session_state.manual_text or "").strip()
                     if manual:
                         source_text = manual
@@ -535,7 +588,6 @@ if st.session_state.is_generating:
                         st.session_state.is_generating = False
                         st.rerun()
             else:
-                # 没填 URL：只能用手动
                 manual = (st.session_state.manual_text or "").strip()
                 if manual:
                     source_text = manual
@@ -545,7 +597,6 @@ if st.session_state.is_generating:
                     st.session_state.is_generating = False
                     st.rerun()
 
-        # 记住本次原文，方便“再生成一次”
         st.session_state.last_source_text = source_text
         st.session_state.last_source_hint = source_hint
 
@@ -566,6 +617,7 @@ if st.session_state.is_generating:
             msg = response.text[:400] if response.text else ""
             st.session_state.last_error = f"模型接口请求失败：HTTP {response.status_code}\n\n{msg}"
             st.session_state.is_generating = False
+            st.session_state.use_last_source = False
             st.rerun()
 
         last_render_len = 0
@@ -601,13 +653,11 @@ if st.session_state.is_generating:
         plain_final = to_plain_text(md_final)
         rich_html_out = build_rich_html(plain_final)
 
-        # 覆盖写入结果（下一次生成完成再替换）
         st.session_state.result_md = md_final
         st.session_state.result_plain = plain_final
         st.session_state.result_rich_html = rich_html_out
         st.session_state.last_error = None
 
-        # 恢复初始状态（按钮回“开始生成”）
         st.session_state.is_generating = False
         st.session_state.use_last_source = False
         st.rerun()
