@@ -2,11 +2,16 @@ def render_wechat_editor(initial_html: str, version: int):
     init_js = json.dumps(initial_html or "")
     ver_js = json.dumps(str(version))
 
-    # 用占位符，最后再替换，避免 f-string 和 .format 的大括号问题
+    # 普通三引号字符串，不是 f-string
     html = """
 <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
 <script src="https://unpkg.com/turndown/dist/turndown.js"></script>
+
+<div id="toast" style="position:fixed;top:14px;right:14px;z-index:99999;display:none;
+  background:rgba(17,17,17,0.92);color:#fff;padding:10px 12px;border-radius:10px;
+  font-weight:800;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,0.2);">
+</div>
 
 <div id="wrap" style="border:1px solid #07c160;border-radius:12px;background:#fff;">
   <!-- 顶部固定操作区 -->
@@ -24,41 +29,42 @@ def render_wechat_editor(initial_html: str, version: int):
       </div>
     </div>
 
-    <!-- 顶部消息条（替代各种 alert/confirm/prompt） -->
-    <div id="msgBar" style="margin-top:6px;font-size:12px;min-height:18px;color:#07c160;"></div>
-
     <!-- 工具栏固定在 topbar 内 -->
-    <div id="toolbar" style="margin-top:10px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:6px 8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+    <div id="toolbar" style="margin-top:10px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:6px 8px;">
       <span class="ql-formats">
         <button class="ql-undo" type="button">↶</button>
         <button class="ql-redo" type="button">↷</button>
       </span>
 
-      <!-- 自由字号 10–50px -->
+      <!-- 字体 -->
       <span class="ql-formats">
-        <label style="font-size:12px;margin-right:4px;color:#666;">字号(px)</label>
-        <input id="fontSizeInput" type="number" min="10" max="50" value="17" style="width:64px;padding:2px 4px;font-size:12px;"/>
-        <button id="btnFontSizeApply" type="button" style="padding:2px 6px;font-size:12px;">应用</button>
+        <select class="ql-font" id="fontSelect">
+          <option value="wechat" selected>公众号默认</option>
+          <option value="simsun">宋体</option>
+          <option value="simhei">黑体</option>
+          <option value="kaiti">楷体</option>
+          <option value="fangsong">仿宋</option>
+          <option value="yahei">微软雅黑</option>
+          <option value="pingfang">苹方</option>
+          <option value="notosans">Noto Sans SC</option>
+          <option value="sourcehan">思源黑体</option>
+          <option value="arial">Arial</option>
+          <option value="helvetica">Helvetica</option>
+          <option value="times">Times New Roman</option>
+          <option value="georgia">Georgia</option>
+          <option value="verdana">Verdana</option>
+          <option value="tahoma">Tahoma</option>
+          <option value="courier">Courier New</option>
+        </select>
       </span>
 
-      <!-- 字体下拉 -->
-      <span class="ql-formats">
-        <select id="fontSelect" style="min-width:170px;font-size:12px;">
-          <option value="">公众号默认字体</option>
-          <option value="SimSun,宋体,serif">宋体（正文推荐）</option>
-          <option value="SimHei,黑体,sans-serif">黑体（小标题推荐）</option>
-          <option value="Microsoft YaHei,微软雅黑,sans-serif">微软雅黑</option>
-          <option value="KaiTi,楷体,serif">楷体</option>
-          <option value="FangSong,仿宋,serif">仿宋</option>
-          <option value="PingFang SC,Helvetica Neue,Arial,sans-serif">苹方</option>
-          <option value="Arial,Helvetica,sans-serif">Arial</option>
-          <option value="Times New Roman,Times,serif">Times New Roman</option>
-          <option value="Tahoma,Geneva,sans-serif">Tahoma</option>
-          <option value="Verdana,Geneva,sans-serif">Verdana</option>
-          <option value="Georgia,serif">Georgia</option>
-          <option value="Courier New,Courier,monospace">Courier New</option>
-        </select>
-        <button id="btnFontApply" type="button" style="padding:2px 6px;font-size:12px;">应用</button>
+      <!-- 字号：10-50 下拉 + 数字输入 -->
+      <span class="ql-formats" style="display:inline-flex;align-items:center;gap:6px;">
+        <select class="ql-size" id="sizeSelect"></select>
+        <input id="sizeInput" type="number" min="10" max="50" step="1"
+          style="width:72px;border:1px solid rgba(0,0,0,0.15);border-radius:8px;padding:6px 8px;font-weight:800;"
+          title="输入 10-50 的字号（px）" />
+        <span style="font-weight:800;color:#666;">px</span>
       </span>
 
       <span class="ql-formats">
@@ -93,14 +99,12 @@ def render_wechat_editor(initial_html: str, version: int):
         <button class="ql-code-block"></button>
       </span>
 
+      <!-- HR + Emoji（无表格按钮） -->
       <span class="ql-formats">
         <button id="btnHr" type="button">—</button>
         <button id="btnEmoji" type="button">😊</button>
       </span>
     </div>
-
-    <!-- 富表情面板 -->
-    <div id="emojiPanel" class="emoji-panel"></div>
   </div>
 
   <!-- 可滚动编辑区 -->
@@ -112,65 +116,103 @@ def render_wechat_editor(initial_html: str, version: int):
   </div>
 </div>
 
+<!-- Emoji Modal -->
+<div id="emojiModal" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.35);">
+  <div style="width:min(820px,92vw);max-height:min(620px,82vh);overflow:hidden;background:#fff;border-radius:14px;
+              position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+              box-shadow:0 20px 60px rgba(0,0,0,0.25);border:1px solid rgba(0,0,0,0.08);">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(0,0,0,0.08);">
+      <div style="font-weight:900;font-size:16px;">选择表情</div>
+      <button id="emojiClose" style="border:none;background:#f2f2f2;border-radius:10px;padding:8px 10px;font-weight:900;cursor:pointer;">✖</button>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.06);flex-wrap:wrap;">
+      <input id="emojiSearch" placeholder="搜索（输入表情/编号）" style="flex:1;min-width:220px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;padding:10px 12px;font-weight:800;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="emojiTab" data-tab="common">常用</button>
+        <button class="emojiTab" data-tab="face">表情</button>
+        <button class="emojiTab" data-tab="hand">手势</button>
+        <button class="emojiTab" data-tab="life">生活</button>
+        <button class="emojiTab" data-tab="sign">符号</button>
+      </div>
+    </div>
+
+    <div id="emojiGrid" style="padding:12px 14px;overflow:auto;max-height:min(520px,68vh);display:grid;
+                              grid-template-columns:repeat(12,1fr);gap:8px;">
+    </div>
+  </div>
+</div>
+
 <style>
-.ql-container {{ border:none !important; font-family:SimSun,宋体,serif; }}
-.ql-editor {{
-  min-height: 520px;
+.ql-container { border:none !important; }
+.ql-editor {
+  font-family: SimSun,宋体,serif;
   font-size: 17px;
   line-height: 2;
   color: #000;
-}}
-@media (max-width: 768px) {{
-  .ql-editor {{ min-height: 420px; }}
-}}
-.emoji-panel {{
-  display:none;
-  margin-top:8px;
-  border:1px solid rgba(0,0,0,0.08);
-  border-radius:10px;
-  padding:8px;
-  max-height:210px;
-  overflow-y:auto;
+  min-height: 520px;
+}
+
+/* 自适配高度：手机更低，桌面更高 */
+@media (max-width: 768px) {
+  .ql-editor { min-height: 420px; }
+}
+
+/* emoji tab button */
+.emojiTab{
+  border:1px solid rgba(0,0,0,0.12);
   background:#fff;
-  box-shadow:0 4px 16px rgba(0,0,0,0.08);
-}}
-.emoji-item {{
-  font-size:20px;
-  padding:4px 6px;
-  margin:2px;
-  border:none;
-  background:transparent;
+  border-radius:10px;
+  padding:8px 10px;
+  font-weight:900;
   cursor:pointer;
-}}
-.emoji-item:hover {{
-  background:#f3f3f3;
-}}
+}
+.emojiTab.active{
+  background:#07c160;
+  color:#fff;
+  border-color:#07c160;
+}
+
+/* emoji cell */
+.emojiCell{
+  border:1px solid rgba(0,0,0,0.10);
+  border-radius:10px;
+  padding:10px 0;
+  text-align:center;
+  cursor:pointer;
+  font-size:20px;
+  user-select:none;
+}
+.emojiCell:hover{
+  border-color:#07c160;
+  box-shadow:0 6px 18px rgba(7,193,96,0.15);
+}
 </style>
 
 <script>
-const INITIAL_HTML = __INITIAL_HTML__;
-const VERSION = __VERSION__;
+const INITIAL_HTML = __INIT_JS__;
+const VERSION = __VER_JS__;
 
-// 注册字体/字号（使用 style attributor）
-const Font = Quill.import('attributors/style/font');
+function showToast(msg, ms=1600) {
+  const el = document.getElementById('toast');
+  el.innerText = msg;
+  el.style.display = 'block';
+  clearTimeout(el.__t);
+  el.__t = setTimeout(()=>{ el.style.display='none'; }, ms);
+}
+
+/* ===== Quill 注册：字体 + 字号（10-50px） ===== */
+const Font = Quill.import('formats/font');
 Font.whitelist = [
-  'SimSun,宋体,serif',
-  'SimHei,黑体,sans-serif',
-  'Microsoft YaHei,微软雅黑,sans-serif',
-  'KaiTi,楷体,serif',
-  'FangSong,仿宋,serif',
-  'PingFang SC,Helvetica Neue,Arial,sans-serif',
-  'Arial,Helvetica,sans-serif',
-  'Times New Roman,Times,serif',
-  'Tahoma,Geneva,sans-serif',
-  'Verdana,Geneva,sans-serif',
-  'Georgia,serif',
-  'Courier New,Courier,monospace'
+  'wechat','simsun','simhei','kaiti','fangsong','yahei','pingfang','notosans','sourcehan',
+  'arial','helvetica','times','georgia','verdana','tahoma','courier'
 ];
 Quill.register(Font, true);
 
-const SizeStyle = Quill.import('attributors/style/size');
-Quill.register(SizeStyle, true);
+const Size = Quill.import('attributors/style/size');
+const SIZE_LIST = Array.from({length: 41}, (_,i)=> (10+i) + 'px'); // 10px~50px
+Size.whitelist = SIZE_LIST;
+Quill.register(Size, true);
 
 const quill = new Quill('#editor', {
   theme: 'snow',
@@ -180,33 +222,16 @@ const quill = new Quill('#editor', {
   }
 });
 
+/* ===== 内容持久化 ===== */
 const KEY_HTML = 'wechat_editor_html';
 const KEY_VER  = 'wechat_editor_ver';
-
-function getMsgBar() {
-  return document.getElementById('msgBar');
-}
-function showMsg(text, isError) {
-  const bar = getMsgBar();
-  if (!bar) return;
-  bar.textContent = text || '';
-  bar.style.color = isError ? '#d03050' : '#07c160';
-  if (text) {
-    const current = text;
-    setTimeout(() => {
-      if (bar.textContent === current) bar.textContent = '';
-    }, 3000);
-  }
-}
 
 function setEditorHtml(h) {
   quill.clipboard.dangerouslyPasteHTML(h || "");
 }
-
 function getEditorRoot() {
   return document.querySelector('#editor .ql-editor');
 }
-
 function saveLocal() {
   const root = getEditorRoot();
   if (!root) return;
@@ -214,7 +239,6 @@ function saveLocal() {
   localStorage.setItem(KEY_VER, VERSION);
 }
 
-// 首次加载
 (function initContent(){
   const savedVer = localStorage.getItem(KEY_VER);
   const savedHtml = localStorage.getItem(KEY_HTML);
@@ -228,11 +252,10 @@ function saveLocal() {
   }
 })();
 
-// 编辑时节流保存
 let saveTimer = null;
 quill.on('text-change', function(){
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveLocal, 400);
+  saveTimer = setTimeout(saveLocal, 350);
 });
 
 // undo/redo
@@ -242,74 +265,62 @@ document.querySelector('.ql-redo').addEventListener('click', () => quill.history
 // HR
 document.getElementById('btnHr').addEventListener('click', () => {
   const range = quill.getSelection(true) || { index: quill.getLength() };
-  quill.clipboard.dangerouslyPasteHTML(range.index, '<p><hr/></p>');
-  saveLocal();
+  quill.clipboard.dangerouslyPasteHTML(range.index, '<p><hr/></p><p></p>');
 });
 
-// 字号应用（10–50px）
-document.getElementById('btnFontSizeApply').addEventListener('click', () => {
-  const input = document.getElementById('fontSizeInput');
-  let v = parseInt(input.value || '0', 10);
-  if (!v || v < 10 || v > 50) {
-    showMsg('字号范围为 10–50px', true);
-    return;
-  }
-  const range = quill.getSelection();
-  const len = quill.getLength();
-  const target = (range && range.length > 0) ? range : { index: 0, length: len };
-  quill.formatText(target.index, target.length, 'size', v + 'px');
-  saveLocal();
-  showMsg('已应用字号 ' + v + 'px');
-});
+/* ===== 字号：下拉 + 数字输入 ===== */
+const sizeSelect = document.getElementById('sizeSelect');
+const sizeInput  = document.getElementById('sizeInput');
 
-// 字体应用
-document.getElementById('btnFontApply').addEventListener('click', () => {
-  const select = document.getElementById('fontSelect');
-  const value = select.value;
-  const range = quill.getSelection();
-  const len = quill.getLength();
-  const target = (range && range.length > 0) ? range : { index: 0, length: len };
-  if (value) {
-    quill.formatText(target.index, target.length, 'font', value);
-    showMsg('已应用字体');
-  } else {
-    quill.formatText(target.index, target.length, 'font', false);
-    showMsg('已恢复默认字体');
-  }
-  saveLocal();
-});
+function fillSizeSelect() {
+  sizeSelect.innerHTML = '';
+  const common = [12,14,16,17,18,20,22,24,26,28,30,36,40,48];
+  const commonSet = new Set(common.map(n=>n+'px'));
 
-// 富表情面板
-const EMOJIS = [
-  '😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😍','😘','😗','😙','😚','🙂','🤗','🤩','🤔',
-  '😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','🥱','😴','😌','😛','😜','😝','🤤','😓',
-  '😔','😕','🙃','🤑','😲','☹️','🙁','😖','😞','😟','😤','😢','😭','😦','😧','😨','😩','🤯','😬','😰',
-  '😱','🥵','🥶','😳','🤪','😵','😡','😠','🤬','😷','🤒','🤕','🤢','🤮','🤧','😇','🥰','🤝','👍','👎',
-  '👌','🙏','👏','💪','🔥','⭐','🌟','🚀','🎯','📌','📍','🧠','💡','✅','❌'
-];
-
-const emojiPanel = document.getElementById('emojiPanel');
-EMOJIS.forEach(e => {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'emoji-item';
-  btn.textContent = e;
-  btn.addEventListener('click', () => {
-    const range = quill.getSelection(true) || { index: quill.getLength() };
-    quill.insertText(range.index, e);
-    quill.setSelection(range.index + e.length);
-    saveLocal();
+  common.forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n + 'px';
+    opt.innerText = n + 'px';
+    if (n === 17) opt.selected = true;
+    sizeSelect.appendChild(opt);
   });
-  emojiPanel.appendChild(btn);
-});
 
-document.getElementById('btnEmoji').addEventListener('click', () => {
-  if (!emojiPanel) return;
-  const visible = emojiPanel.style.display === 'block';
-  emojiPanel.style.display = visible ? 'none' : 'block';
-});
+  for (let n=10; n<=50; n++) {
+    const v = n + 'px';
+    if (commonSet.has(v)) continue;
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.innerText = v;
+    sizeSelect.appendChild(opt);
+  }
+}
+fillSizeSelect();
+sizeInput.value = 17;
 
-// 一键排版
+function applySize(px) {
+  if (!px) return;
+  const n = parseInt(px.replace('px',''), 10);
+  if (isNaN(n)) return;
+  const clamped = Math.min(50, Math.max(10, n));
+  const val = clamped + 'px';
+  quill.format('size', val);
+  sizeInput.value = clamped;
+  let found = false;
+  for (const o of sizeSelect.options) {
+    if (o.value === val) { sizeSelect.value = val; found = true; break; }
+  }
+  if (!found && sizeSelect.options.length) {
+    sizeSelect.value = '17px';
+  }
+}
+sizeSelect.addEventListener('change', () => applySize(sizeSelect.value));
+sizeInput.addEventListener('change', () => {
+  const v = parseInt(sizeInput.value || '17', 10);
+  applySize(v + 'px');
+});
+applySize('17px');
+
+/* 一键排版 */
 function applyWechatLayout() {
   const root = getEditorRoot();
   if (!root) return;
@@ -329,7 +340,7 @@ function applyWechatLayout() {
 
   root.querySelectorAll('p').forEach(p => {
     const t = (p.innerText || '').trim();
-    if (/^0[1-4]\\.\s+/.test(t) || t === "【推荐爆款标题】") {
+    if (/^0[1-4]\.\s+/.test(t) || t === "【推荐爆款标题】") {
       const h2 = document.createElement('h2');
       h2.innerText = t;
       h2.style.fontFamily = 'SimHei,黑体,sans-serif';
@@ -344,16 +355,34 @@ function applyWechatLayout() {
   });
 
   saveLocal();
-  showMsg('已应用公众号排版');
+  showToast('已应用公众号排版');
 }
 document.getElementById('btnApply').addEventListener('click', applyWechatLayout);
 
-// 复制富文本（不自动排版）
+/* 复制富文本（不自动排版） */
 async function copyRichAll() {
   const root = getEditorRoot();
   if (!root) return;
 
-  const htmlText = `<div style="font-family:SimSun,宋体,serif;font-size:17px;line-height:2;color:#000;">${root.innerHTML}</div>`;
+  const clone = root.cloneNode(true);
+  clone.querySelectorAll('p').forEach(p => {
+    if (!p.style.margin) p.style.margin = '0 0 14px 0';
+    if (!p.style.fontFamily) p.style.fontFamily = 'SimSun,宋体,serif';
+    if (!p.style.fontSize) p.style.fontSize = '17px';
+    if (!p.style.lineHeight) p.style.lineHeight = '2';
+    if (!p.style.color) p.style.color = '#000';
+  });
+  clone.querySelectorAll('h2').forEach(h2 => {
+    if (!h2.style.fontFamily) h2.style.fontFamily = 'SimHei,黑体,sans-serif';
+    if (!h2.style.fontSize) h2.style.fontSize = '18px';
+    if (!h2.style.fontWeight) h2.style.fontWeight = '800';
+    if (!h2.style.margin) h2.style.margin = '18px 0 8px 0';
+    if (!h2.style.borderLeft) h2.style.borderLeft = '5px solid #07c160';
+    if (!h2.style.paddingLeft) h2.style.paddingLeft = '10px';
+    if (!h2.style.color) h2.style.color = '#000';
+  });
+
+  const htmlText = `<div style="font-family:SimSun,宋体,serif;font-size:17px;line-height:2;color:#000;">${clone.innerHTML}</div>`;
   const plainText = root.innerText || '';
 
   try {
@@ -362,7 +391,7 @@ async function copyRichAll() {
       const textBlob = new Blob([plainText], { type: "text/plain" });
       const item = new ClipboardItem({ "text/html": htmlBlob, "text/plain": textBlob });
       await navigator.clipboard.write([item]);
-      showMsg("已复制（富文本，保留样式）");
+      showToast("已复制富文本（保留样式）");
       return;
     }
   } catch(e) {}
@@ -383,14 +412,14 @@ async function copyRichAll() {
     document.execCommand('copy');
     sel.removeAllRanges();
     document.body.removeChild(temp);
-    showMsg("已复制（富文本，保留样式）");
+    showToast("已复制富文本（保留样式）");
   } catch(e) {
-    showMsg("复制失败：请使用支持剪贴板的浏览器", true);
+    showToast("复制失败：建议用 Chrome/Edge + HTTPS");
   }
 }
 document.getElementById('btnCopyRich').addEventListener('click', copyRichAll);
 
-// 复制 Markdown
+/* 复制 Markdown */
 async function copyMarkdownAll() {
   const root = getEditorRoot();
   if (!root) return;
@@ -410,7 +439,7 @@ async function copyMarkdownAll() {
 
   try {
     await navigator.clipboard.writeText(md);
-    showMsg("已复制 Markdown");
+    showToast("已复制 Markdown");
   } catch(e) {
     const el = document.createElement("textarea");
     el.value = md;
@@ -418,20 +447,95 @@ async function copyMarkdownAll() {
     el.select();
     document.execCommand('copy');
     document.body.removeChild(el);
-    showMsg("已复制 Markdown（兼容模式）");
+    showToast("已复制 Markdown");
   }
 }
 document.getElementById('btnCopyMd').addEventListener('click', copyMarkdownAll);
 
-// 清空
+/* 清空（无 confirm；如果你想保留确认，可以恢复） */
 document.getElementById('btnClear').addEventListener('click', () => {
   quill.setText('');
   localStorage.setItem(KEY_HTML, '');
   localStorage.setItem(KEY_VER, VERSION);
-  showMsg('已清空编辑器内容');
+  showToast("已清空");
 });
+
+/* Emoji：分组 + 搜索 */
+const emojiModal = document.getElementById('emojiModal');
+const emojiGrid = document.getElementById('emojiGrid');
+const emojiSearch = document.getElementById('emojiSearch');
+const emojiClose = document.getElementById('emojiClose');
+const emojiTabs = Array.from(document.querySelectorAll('.emojiTab'));
+
+const EMOJIS = {
+  common: ["😀","😁","😂","🤣","🥹","😊","😇","🙂","😉","😍","😘","😎","🤩","🥳","🤔","🫡","😴","😮","😤","😭","👍","👎","👏","🙏","🔥","✅","⭐","📌","🧠","💡","📈","📉","🧾","📋","✍️","🧩","🚀","⏳","⚡","🎯","🎁","💰","📣","📰","📷","🎬","🎧","🍀"],
+  face: ["😄","😃","😀","😁","😆","😅","😂","🤣","🥲","🥹","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚","😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🥸","🤩","🥳","😏","😒","😞","😔","😟","😕","🙁","☹️","😣","😖","😫","😩","🥺","😢","😭","😤","😠","😡","🤬","😳","🥵","🥶","😱","😨","😰","😥","😓","🫣","🤗","🫠","🤭","🫢","🫡","🤫","🤥","😶","😶‍🌫️","😐","😑","😬","🙄","😯","😦","😧","😮","😲","🥱","😴","🤤","😪","😵","😵‍💫","🤐","🥴","🤢","🤮","🤧","😷","🤒","🤕"],
+  hand: ["👍","👎","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👊","✊","🤛","🤜","👏","🙌","🫶","👐","🤲","🙏","✍️","💪","🦾","🖐️","✋","🖖","👋","🤚","🫱","🫲","🫳","🫴","👉","👈","👆","👇","☝️","👀","🫵","🤝"],
+  life: ["🍎","🍊","🍋","🍌","🍉","🍇","🍓","🫐","🍒","🍑","🥭","🍍","🥑","🍅","🥦","🥕","🌽","🍞","🥐","🥯","🍚","🍜","🍣","🍔","🍟","🍕","🌮","🥗","🍰","🍪","🍫","🍿","☕","🍵","🥤","🧋","🍺","🍷","🎉","🎊","🎈","🎁","🎀","🎯","🏆","🥇","📣","📢","🔔","🧠","💡","📌","📎","🧷","📝","📓","📘","📕","🗂️","📊","📈","🧾","💻","📱","⌨️","🖥️","🖨️","📷","🎥","🎬","🎧","🎵","🚗","✈️","🚀","🛰️","🏝️","⛰️","🌧️","☀️","🌙","⭐","⚡","🔥","🧯","✅","❌","🟢","🟡","🔴"],
+  sign: ["✅","☑️","✔️","✖️","❌","⚠️","❗","‼️","❓","❔","💯","🔺","🔻","⬆️","⬇️","➡️","⬅️","↗️","↘️","↙️","↖️","🔁","🔄","⏸️","▶️","⏩","⏪","⏫","⏬","➕","➖","✳️","✴️","⭐","🌟","✨","💥","🔥","⚡","🟢","🟡","🔴","🟣","🟤","⚪","⚫","🟥","🟧","🟨","🟩","🟦","🟪"]
+};
+
+let currentTab = 'common';
+
+function renderEmojis(tab, keyword='') {
+  const list = EMOJIS[tab] || [];
+  const kw = (keyword || '').trim();
+
+  let filtered = list;
+  if (kw) {
+    const idx = parseInt(kw, 10);
+    if (!isNaN(idx) && idx >= 1 && idx <= list.length) {
+      filtered = [list[idx-1]];
+    } else {
+      filtered = list.filter(e => e.includes(kw));
+    }
+  }
+
+  emojiGrid.innerHTML = '';
+  filtered.forEach((e, i) => {
+    const d = document.createElement('div');
+    d.className = 'emojiCell';
+    d.title = String(i+1);
+    d.innerText = e;
+    d.addEventListener('click', () => {
+      const range = quill.getSelection(true) || { index: quill.getLength() };
+      quill.insertText(range.index, e);
+      closeEmoji();
+      saveLocal();
+      showToast('已插入表情');
+    });
+    emojiGrid.appendChild(d);
+  });
+}
+
+function openEmoji() {
+  emojiModal.style.display = 'block';
+  emojiSearch.value = '';
+  setTab(currentTab);
+  setTimeout(() => emojiSearch.focus(), 50);
+}
+function closeEmoji() {
+  emojiModal.style.display = 'none';
+}
+function setTab(tab) {
+  currentTab = tab;
+  emojiTabs.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  renderEmojis(tab, emojiSearch.value);
+}
+
+document.getElementById('btnEmoji').addEventListener('click', openEmoji);
+emojiClose.addEventListener('click', closeEmoji);
+emojiModal.addEventListener('click', (e) => {
+  if (e.target === emojiModal) closeEmoji();
+});
+emojiTabs.forEach(btn => {
+  btn.addEventListener('click', () => setTab(btn.dataset.tab));
+});
+emojiSearch.addEventListener('input', () => renderEmojis(currentTab, emojiSearch.value));
+setTab('common');
 </script>
 """
 
-    html = html.replace("__INITIAL_HTML__", init_js).replace("__VERSION__", ver_js)
+    # 把占位符替换成真正的 JS 字符串
+    html = html.replace("__INIT_JS__", init_js).replace("__VER_JS__", ver_js)
     components.html(html, height=860)
