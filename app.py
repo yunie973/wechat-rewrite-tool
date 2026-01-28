@@ -2,179 +2,382 @@ import streamlit as st
 import requests
 import json
 from bs4 import BeautifulSoup
-import markdown
-import streamlit.components.v1 as components
 import re
+import html
 
-# --- 1. 视觉皮肤 (微信绿 + 纯黑字 + 高对比度) ---
+# -----------------------------
+# 1) UI：微信绿 + 白底黑字
+# -----------------------------
 st.set_page_config(page_title="高级原创二创助手", layout="centered")
 
 st.markdown("""
-    <style>
-    /* 全局颜色强制：背景白，文字绝对纯黑 */
-    .stApp { background-color: #ffffff; color: #000000 !important; }
-    h1 { color: #07c160 !important; font-family: "Microsoft YaHei"; text-align: center; font-weight: 800; }
-    
-    /* 输入框加固：文字黑色，边框绿色 */
-    .stTextInput input { color: #000000 !important; font-weight: bold !important; font-size: 16px !important; }
-    .stTextInput > div > div { border: 2px solid #07c160 !important; }
+<style>
+.stApp { background-color: #ffffff; color: #000000 !important; }
+h1 { color: #07c160 !important; font-family: "Microsoft YaHei"; text-align: center; font-weight: bold; }
 
-    /* 输出容器：浅灰背景，纯黑字体，保留换行 */
-    .result-box {
-        background-color: #f6f6f6 !important;
-        color: #000000 !important;
-        padding: 30px;
-        border-radius: 8px;
-        border: 1px solid #07c160;
-        font-family: 'SimSun', 'STSong', '宋体', serif;
-        font-size: 17px;
-        line-height: 2.2;
-        white-space: pre-wrap; /* 强制保留所有换行 */
-        text-align: justify;
-    }
+.stTextInput input { color: #000000 !important; font-weight: bold !important; }
+.stTextInput > div > div { border: 2px solid #07c160 !important; }
 
-    /* 微信绿按钮 */
-    div.stButton > button { background-color: #07c160 !important; color: white !important; border-radius: 8px; height: 50px; font-weight: bold; width: 100%; border: none; font-size: 18px; }
+/* 页脚与二维码 */
+.footer {
+    position: fixed; left: 0; bottom: 0; width: 100%;
+    background-color: white; padding: 12px 0; border-top: 2px solid #07c160;
+    z-index: 999; display: flex; justify-content: center; align-items: center; gap: 20px;
+}
+.qr-item { color: #07c160; font-weight: bold; cursor: pointer; position: relative; }
+.qr-box {
+    display: none; position: absolute; bottom: 45px; left: 50%;
+    transform: translateX(-50%); width: 180px; background: white;
+    padding: 10px; border: 2px solid #07c160; border-radius: 10px; box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+}
+.qr-item:hover .qr-box { display: block; }
+</style>
 
-    /* 固定页脚样式 */
-    .footer {
-        position: fixed; left: 0; bottom: 0; width: 100%;
-        background-color: white; padding: 12px 0; border-top: 2px solid #07c160;
-        z-index: 999; display: flex; justify-content: center; align-items: center; gap: 20px;
-    }
-    .qr-item { color: #07c160; font-weight: bold; cursor: pointer; position: relative; }
-    .qr-box {
-        display: none; position: absolute; bottom: 45px; left: 50%;
-        transform: translateX(-50%); width: 180px; background: white;
-        padding: 10px; border: 2px solid #07c160; border-radius: 10px; box-shadow: 0 8px 25px rgba(0,0,0,0.2);
-    }
-    .qr-item:hover .qr-box { display: block; }
-    </style>
-
-    <div class="footer">
-        <span style="color:#000;">© 2026 <b>@兴洪</b> 版权所有</span>
-        <div class="qr-item">📗 微信加我 <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%;"></div></div>
-        <div class="qr-item">🪐 知识星球 <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;"></div></div>
+<div class="footer">
+    <span style="color:#000;">© 2026 <b>@兴洪</b> 版权所有</span>
+    <div class="qr-item">📗 微信加我
+        <div class="qr-box">
+            <img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%;">
+        </div>
     </div>
+    <div class="qr-item">🪐 知识星球
+        <div class="qr-box">
+            <img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;">
+        </div>
+    </div>
+</div>
 """, unsafe_allow_html=True)
 
 st.title("🛡️ 深度重构级专业工作台")
 
-# --- 2. 核心算法 ---
+# -----------------------------
+# 2) 文本处理
+# -----------------------------
+def format_title_block(text: str) -> str:
+    """
+    强制【推荐爆款标题】后面标题：每行一个，标题区后空三行。
+    不删除标题标点（只做结构分行）。
+    """
+    marker = "【推荐爆款标题】"
+    if marker not in text:
+        return text
 
-def get_article_content(url):
+    start = text.find(marker) + len(marker)
+    after = text[start:]
+
+    # 标题区结束：遇到第一个小标题 ## 01. 或者连续空行（>=3）就结束
+    m1 = re.search(r"\n##\s*0[1-4]\.", after)
+    m2 = re.search(r"\n{3,}", after)
+    candidates = [m.start() for m in [m1, m2] if m]
+    if candidates:
+        end_idx = min(candidates)
+        title_block = after[:end_idx]
+        rest = after[end_idx:]
+    else:
+        title_block = after
+        rest = ""
+
+    raw_lines = [ln.strip() for ln in title_block.split("\n") if ln.strip()]
+
+    # 如果挤成一行：仅用 ;；|｜/ 这些“常见分隔符”拆（不动逗号顿号等标点）
+    if len(raw_lines) < 5 and raw_lines:
+        joined = " ".join(raw_lines)
+        parts = re.split(r"(?:\s*[;；]\s*|\s*[|｜]\s*|\s*/\s*)", joined)
+        raw_lines = [p.strip() for p in parts if p.strip()]
+
+    titles = raw_lines[:5]
+    fixed = marker + "\n" + ("\n".join(titles)).strip() + "\n\n\n"
+    return text[:text.find(marker)] + fixed + rest.lstrip("\n")
+
+
+def safety_filter(text: str) -> str:
+    """
+    禁令拦截 + 结构修正：
+    - 不删正常标点
+    - 只处理破折号字符（禁令要求）
+    - 强制标题区分行与空行
+    """
+    text = text.replace("\\n", "\n")
+
+    # 禁令句式（按你原逻辑保留）
+    text = text.replace("不是", "不单是").replace("而是", "更是")
+
+    # 禁用破折号：只替换破折号字符，不影响其他标点
+    text = text.replace("——", " ").replace("—", " ")
+
+    # 小标题前空行
+    text = re.sub(r'(\n?)(##\s*0[1-4]\.)', r'\n\n\2', text)
+
+    # 标题区：每行一个+空三行
+    text = format_title_block(text)
+    return text
+
+
+def to_plain_text(md_text: str) -> str:
+    """markdown -> 真·纯文本（用于生成富文本显示/复制时的内容骨架）"""
+    t = md_text
+    t = re.sub(r'^\s*##\s*', '', t, flags=re.MULTILINE)           # 去掉 ## 前缀
+    t = re.sub(r'\*\*(.+?)\*\*', r'\1', t)                         # 去掉 ** **
+    t = re.sub(r'\*(.+?)\*', r'\1', t)                             # 去掉 * *
+    t = re.sub(r'`(.+?)`', r'\1', t)                               # 去掉 ` `
+    t = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', t)                 # [text](url) -> text
+    return t
+
+
+def build_rich_html(plain_text: str) -> str:
+    """
+    生成“可粘贴保留字体字号”的 HTML：
+    - 小标题：黑体18加粗
+    - 正文：宋体17
+    """
+    lines = plain_text.split("\n")
+    parts = ['<div style="font-family:SimSun,宋体,serif;font-size:17px;line-height:2;color:#000;">']
+    for ln in lines:
+        if ln.strip() == "":
+            parts.append("<p><br/></p>")
+            continue
+
+        # 小标题：01. XXX
+        if re.match(r'^\s*0[1-4]\.\s*.+\s*$', ln):
+            parts.append(
+                f'<p style="margin:18px 0 8px 0;font-family:SimHei,黑体,sans-serif;font-size:18px;font-weight:800;">'
+                f'{html.escape(ln.strip())}</p>'
+            )
+            continue
+
+        # 标题区 “【推荐爆款标题】”以及其后5行，也给黑体18更像标题
+        if ln.strip() == "【推荐爆款标题】":
+            parts.append(
+                f'<p style="margin:0 0 10px 0;font-family:SimHei,黑体,sans-serif;font-size:18px;font-weight:800;">'
+                f'{html.escape(ln.strip())}</p>'
+            )
+            continue
+
+        parts.append(f'<p style="margin:0 0 14px 0;">{html.escape(ln)}</p>')
+
+    parts.append("</div>")
+    return "".join(parts)
+
+
+# -----------------------------
+# 3) 抓取 & DeepSeek 流式
+# -----------------------------
+def get_article_content(url: str):
     headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"}
     try:
         res = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(res.text, 'html.parser')
         content_div = soup.find('div', id='js_content')
         return content_div.get_text(separator='\n', strip=True) if content_div else None
-    except: return None
+    except:
+        return None
 
-def safety_filter(text):
-    """【物理过滤器】执行禁令，强制标题断行"""
-    text = text.replace("\\n", "\n")
-    # 物理拦截禁令
-    text = text.replace("不是", "不单是").replace("而是", "更是").replace("——", "，").replace("—", "，")
-    # 物理强制换行：给爆款标题和小标题补位
-    text = re.sub(r'(【推荐爆款标题】)', r'\1\n', text)
-    text = re.sub(r'([1-5]\. )', r'\n\1', text)
-    text = re.sub(r'(\n?)(## 0[1-4]\.)', r'\n\n\2', text)
-    return text
 
-def stream_ai_rewrite(text, api_key):
+def stream_ai_rewrite(text: str, api_key: str):
     url = "https://api.deepseek.com/chat/completions"
     system_prompt = """假设你是一个专业的自媒体作家。对下文进行二创。
-    【核心禁令】：严禁使用“不是...而是”，严禁出现破折号，严禁使用列表/分点。
-    【结构要求 - 严格执行】：
-    1. 第一行写：【推荐爆款标题】。
-    2. 下方列出 5 个爆款标题，每个标题必须独占一行。
-    3. 标题列表结束后，必须按 3 次回车进行换行。
-    4. 正文开头写150字引入语。
-    5. 正文中使用 ## 01. XXX 格式的小标题，且前后各空一行。"""
-    
+【原创加强建议】：句型词汇调整、内容拓展、避免关键词、结构逻辑调整、视角切换、重点聚焦、角度转换、避免直接引用。
+【核心禁令】：
+- 永远不要出现“不是....，而是”的句式。
+- 绝对不要出现破折号（——）。
+- 绝对禁止结构化：禁止使用列表、分点（如1.2.3.或●），保持段落连贯性。
+【输出结构】：
+1. 第一行写【推荐爆款标题】，接着输出5个爆款标题，每行一个。
+2. 标题区后空三行。
+3. 正文开头必须先写150字引入语。
+4. 小标题格式固定为 ## 01. XXX，总数控制在 2-4 个。"""
+
     payload = {
         "model": "deepseek-chat",
-        "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"原文=（{text}）"}],
-        "stream": True, "temperature": 0.8
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"原文=（{text}）"}
+        ],
+        "stream": True,
+        "temperature": 0.8
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     return requests.post(url, headers=headers, json=payload, stream=True)
 
-# --- 3. 展示逻辑 (修复 NameError) ---
 
+# -----------------------------
+# 4) 右上角复制组件（富文本/Markdown）
+# -----------------------------
+def render_block_with_copy_rich(rich_html: str, plain_fallback: str, title: str):
+    """
+    显示富文本块 + 右上角复制按钮：
+    - 优先写入 text/html
+    - 同时写入 text/plain 作为 fallback
+    """
+    rich_js = json.dumps(rich_html)
+    plain_js = json.dumps(plain_fallback)
+    title_esc = html.escape(title)
+
+    components.html(f"""
+<div style="position:relative;border:1px solid #07c160;border-radius:10px;background:#fff;padding:18px 18px 12px 18px;">
+  <div style="font-weight:800;color:#000;margin:0 0 12px 0;font-family:Microsoft YaHei;">{title_esc}</div>
+
+  <button id="copyBtn"
+    style="position:absolute;top:12px;right:12px;background:#07c160;color:#fff;border:none;border-radius:8px;
+           padding:8px 12px;cursor:pointer;font-weight:800;">
+    📋 复制
+  </button>
+
+  <div id="content">
+    {rich_html}
+  </div>
+</div>
+
+<script>
+async function copyRich(){{
+  const htmlText = {rich_js};
+  const plainText = {plain_js};
+
+  // 1) 新版：ClipboardItem 复制 HTML + 纯文本
+  try {{
+    if (navigator.clipboard && window.ClipboardItem) {{
+      const htmlBlob = new Blob([htmlText], {{ type: "text/html" }});
+      const textBlob = new Blob([plainText], {{ type: "text/plain" }});
+      const item = new ClipboardItem({{
+        "text/html": htmlBlob,
+        "text/plain": textBlob
+      }});
+      await navigator.clipboard.write([item]);
+      alert("已复制（保留字体字号）");
+      return;
+    }}
+  }} catch(e) {{}}
+
+  // 2) 兼容：选中 contenteditable 然后 execCommand('copy')（很多环境也能复制富文本）
+  try {{
+    const temp = document.createElement("div");
+    temp.setAttribute("contenteditable", "true");
+    temp.style.position = "fixed";
+    temp.style.left = "-9999px";
+    temp.innerHTML = htmlText;
+    document.body.appendChild(temp);
+
+    const range = document.createRange();
+    range.selectNodeContents(temp);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    document.execCommand("copy");
+    sel.removeAllRanges();
+    document.body.removeChild(temp);
+
+    alert("已复制（保留字体字号）");
+    return;
+  }} catch(e) {{}}
+
+  // 3) 最后兜底：至少复制纯文本
+  try {{
+    await navigator.clipboard.writeText(plainText);
+    alert("已复制（降级为纯文本）");
+  }} catch(e) {{
+    alert("复制失败：请使用浏览器 HTTPS 环境或更换浏览器");
+  }}
+}}
+
+document.getElementById("copyBtn").addEventListener("click", copyRich);
+</script>
+""", height=520)
+
+
+def render_block_with_copy_markdown(md_text: str, title: str):
+    """显示 Markdown 原样 + 右上角复制按钮（复制 text/plain）"""
+    md_esc = html.escape(md_text)
+    md_js = json.dumps(md_text)
+    title_esc = html.escape(title)
+
+    components.html(f"""
+<div style="position:relative;border:1px solid #07c160;border-radius:10px;background:#fff;padding:18px;">
+  <div style="font-weight:800;color:#000;margin:0 0 12px 0;font-family:Microsoft YaHei;">{title_esc}</div>
+
+  <button id="copyBtnMd"
+    style="position:absolute;top:12px;right:12px;background:#07c160;color:#fff;border:none;border-radius:8px;
+           padding:8px 12px;cursor:pointer;font-weight:800;">
+    📋 复制
+  </button>
+
+  <pre style="margin:0;white-space:pre-wrap;line-height:1.8;font-size:14px;
+              font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;
+              background:#ffffff;border-radius:8px;">{md_esc}</pre>
+</div>
+
+<script>
+async function copyMd(){{
+  const text = {md_js};
+  try {{
+    await navigator.clipboard.writeText(text);
+    alert("Markdown 已复制");
+  }} catch(e) {{
+    // fallback
+    const el = document.createElement("textarea");
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+    alert("Markdown 已复制");
+  }}
+}}
+document.getElementById("copyBtnMd").addEventListener("click", copyMd);
+</script>
+""", height=520)
+
+
+# -----------------------------
+# 5) 页面逻辑
+# -----------------------------
 target_url = st.text_input("🔗 粘贴链接开始深度重构")
 
-if st.button("🚀 开始极速重写"):
+if st.button("🚀 开始极速生成", type="primary"):
     api_key = st.secrets.get("DEEPSEEK_API_KEY")
-    if target_url and api_key:
+
+    if not target_url:
+        st.error("请先粘贴链接。")
+    elif not api_key:
+        st.error("未检测到 DEEPSEEK_API_KEY，请在 .streamlit/secrets.toml 配置。")
+    else:
         raw_text = get_article_content(target_url)
-        if raw_text:
+        if not raw_text:
+            st.error("内容抓取失败")
+        else:
             full_content = ""
             placeholder = st.empty()
+
             response = stream_ai_rewrite(raw_text, api_key)
+
             for line in response.iter_lines():
-                if line:
-                    chunk = line.decode('utf-8').removeprefix('data: ')
-                    if chunk == '[DONE]': break
-                    try:
-                        data = json.loads(chunk)
-                        full_content += data['choices'][0]['delta'].get('content', '')
-                        placeholder.markdown(safety_filter(full_content) + "▌")
-                    except: continue
-            
-            final_text = safety_filter(full_content)
+                if not line:
+                    continue
+                chunk = line.decode('utf-8', errors='ignore').removeprefix('data: ').strip()
+                if chunk == "[DONE]":
+                    break
+                try:
+                    data = json.loads(chunk)
+                    full_content += data["choices"][0]["delta"].get("content", "")
+                    placeholder.markdown(safety_filter(full_content) + "▌")
+                except:
+                    continue
+
             placeholder.empty()
 
-            # --- A. 纯文本区 (顺序第一) ---
-            st.subheader("📋 1. 纯文本格式")
-            st.markdown(f'<div class="result-box">{final_text}</div>', unsafe_allow_html=True)
-            
-            txt_safe = final_text.replace('`', '\\`').replace('$', '\\$')
-            components.html(f"""
-                <button onclick="copyTxt()" style="width:100%;height:45px;background:#07c160;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:18px;">📋 一键复制纯文本</button>
-                <script>
-                function copyTxt() {{
-                    const el = document.createElement('textarea');
-                    el.value = `{txt_safe}`;
-                    document.body.appendChild(el); el.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(el);
-                    alert('纯文本复制成功！');
-                }}
-                </script>
-            """, height=60)
+            md_final = safety_filter(full_content)     # Markdown 原文
+            plain_final = to_plain_text(md_final)      # 用来生成富文本
+            rich_html = build_rich_html(plain_final)   # 富文本HTML（保留字号字体）
 
-            st.divider()
+            st.subheader("🖨️ 1) 一键复制：保留字体字号（富文本）")
+            render_block_with_copy_rich(
+                rich_html=rich_html,
+                plain_fallback=plain_final,
+                title="富文本成品（小标题黑体18 / 正文宋体17）"
+            )
 
-            # --- B. Markdown 预览区 (顺序第二) ---
-            st.subheader("🎨 2. Markdown 预览 (18号/17号)")
-            
-            # 【重要】在这里明确定义变量，解决 NameError
-            final_html = markdown.markdown(final_text) 
-            
-            st.markdown(f"""
-                <div id="md-view" class="result-box" style="background:#ffffff !important;">
-                    <style>
-                        #md-view {{ font-family: "SimSun", serif !important; font-size: 17px !important; color: #000000 !important; }}
-                        #md-view h2 {{ font-size: 18px !important; font-family: "SimHei", sans-serif !important; font-weight: bold !important; color: #000000 !important; margin-top: 30px; border-left: 5px solid #07c160; padding-left: 10px; }}
-                        #md-view p {{ margin-bottom: 20px; color: #000000 !important; }}
-                    </style>
-                    {final_html}
-                </div>
-            """, unsafe_allow_html=True)
-            
-            components.html("""
-                <button onclick="copyMd()" style="width:100%;height:45px;background:#07c160;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:18px;">📋 一键复制 Markdown 成品</button>
-                <script>
-                function copyMd() {
-                    const range = document.createRange();
-                    range.selectNode(parent.document.getElementById('md-view'));
-                    window.getSelection().removeAllRanges();
-                    window.getSelection().addRange(range);
-                    document.execCommand('copy');
-                    alert('Markdown 预览已复制，可贴入公众号！');
-                }
-                </script>
-            """, height=60)
-        else: st.error("内容抓取失败")
+            st.subheader("🧾 2) 一键复制：Markdown 原文")
+            render_block_with_copy_markdown(
+                md_text=md_final,
+                title="Markdown 原文（原样显示）"
+            )
