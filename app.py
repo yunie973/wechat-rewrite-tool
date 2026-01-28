@@ -24,7 +24,7 @@ h1 { color: #07c160 !important; font-family: "Microsoft YaHei"; text-align: cent
 .scrollbox::-webkit-scrollbar-thumb { background: #bdeed6; border-radius: 10px; }
 .scrollbox::-webkit-scrollbar-track { background: #f6fffa; }
 
-/* 绿色“开始生成”按钮（覆盖 Streamlit 默认） */
+/* 绿色按钮（覆盖 Streamlit 默认） */
 div.stButton > button {
     background-color: #07c160 !important;
     color: #ffffff !important;
@@ -69,13 +69,23 @@ div.stButton > button:disabled { background-color: #9be4be !important; color: #f
 
 st.title("🛡️ 深度重构级专业工作台")
 
-# ✅ session_state 一定要放在 import 后面
+# -----------------------------
+# 2) session_state（必须在 import 之后）
+# -----------------------------
 if "is_generating" not in st.session_state:
     st.session_state.is_generating = False
 
+# 保存“上一次结果”，生成完恢复初始状态，但内容保留到下一次生成覆盖
+if "result_md" not in st.session_state:
+    st.session_state.result_md = None
+if "result_plain" not in st.session_state:
+    st.session_state.result_plain = None
+if "result_rich_html" not in st.session_state:
+    st.session_state.result_rich_html = None
+
 
 # -----------------------------
-# 2) 文本处理
+# 3) 文本处理
 # -----------------------------
 def format_title_block(text: str) -> str:
     """强制【推荐爆款标题】后标题每行一个；标题区后空三行；不乱动正常标点。"""
@@ -113,9 +123,17 @@ def format_title_block(text: str) -> str:
 def safety_filter(text: str) -> str:
     """禁令拦截 + 结构修正（不删正常标点，只处理破折号字符）。"""
     text = text.replace("\\n", "\n")
+
+    # 按你原逻辑
     text = text.replace("不是", "不单是").replace("而是", "更是")
+
+    # 禁用破折号字符
     text = text.replace("——", " ").replace("—", " ")
+
+    # 小标题前空行
     text = re.sub(r'(\n?)(##\s*0[1-4]\.)', r'\n\n\2', text)
+
+    # 标题区：每行一个 + 空三行
     return format_title_block(text)
 
 
@@ -139,6 +157,7 @@ def build_rich_html(plain_text: str) -> str:
             parts.append("<p><br/></p>")
             continue
 
+        # 小标题：01. XXX
         if re.match(r'^\s*0[1-4]\.\s*.+\s*$', ln):
             parts.append(
                 f'<p style="margin:18px 0 8px 0;font-family:SimHei,黑体,sans-serif;'
@@ -146,6 +165,7 @@ def build_rich_html(plain_text: str) -> str:
             )
             continue
 
+        # 标题区 marker
         if ln.strip() == "【推荐爆款标题】":
             parts.append(
                 f'<p style="margin:0 0 10px 0;font-family:SimHei,黑体,sans-serif;'
@@ -160,7 +180,7 @@ def build_rich_html(plain_text: str) -> str:
 
 
 # -----------------------------
-# 3) 抓取 & DeepSeek 流式
+# 4) 抓取 & DeepSeek 流式
 # -----------------------------
 def get_article_content(url: str):
     headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"}
@@ -201,7 +221,7 @@ def stream_ai_rewrite(text: str, api_key: str):
 
 
 # -----------------------------
-# 4) 可滚动容器 + 右上角复制（JS 花括号已转义 {{ }}）
+# 5) 可滚动容器 + 右上角复制（JS 花括号已转义 {{ }}）
 # -----------------------------
 def render_block_with_copy_rich(rich_html: str, plain_fallback: str, title: str, height_px: int = 520):
     rich_js = json.dumps(rich_html)
@@ -325,19 +345,37 @@ document.getElementById("copyBtnMd").addEventListener("click", copyMd);
 
 
 # -----------------------------
-# 5) 页面逻辑
+# 6) 页面逻辑
 # -----------------------------
 target_url = st.text_input("🔗 粘贴链接开始深度重构")
 
+# 按钮：开始生成 / 正在生成中...
 btn_text = "正在生成中..." if st.session_state.is_generating else "开始生成"
 clicked = st.button(btn_text, disabled=st.session_state.is_generating, key="gen_btn")
 
-# 点击按钮后立刻切换状态并 rerun，让按钮马上变“正在生成中...”
+# 点击后：立刻切换状态并 rerun，让按钮马上变“正在生成中...”
 if clicked and not st.session_state.is_generating:
     st.session_state.is_generating = True
     st.rerun()
 
-# 正在生成：执行生成流程
+# ✅ 非生成状态：显示“上一次结果”（直到下一次生成完成覆盖）
+if (not st.session_state.is_generating) and st.session_state.result_md:
+    st.subheader("🖨️ 1) 一键复制：保留字体字号（富文本）")
+    render_block_with_copy_rich(
+        rich_html=st.session_state.result_rich_html,
+        plain_fallback=st.session_state.result_plain,
+        title="富文本成品（小标题黑体18 / 正文宋体17）",
+        height_px=520
+    )
+
+    st.subheader("🧾 2) 一键复制：Markdown 原文")
+    render_block_with_copy_markdown(
+        md_text=st.session_state.result_md,
+        title="Markdown 原文（原样显示）",
+        height_px=520
+    )
+
+# ✅ 生成中：执行生成流程（生成完成后恢复初始状态，但保留结果供复制）
 if st.session_state.is_generating:
     api_key = st.secrets.get("DEEPSEEK_API_KEY")
 
@@ -357,7 +395,6 @@ if st.session_state.is_generating:
         st.session_state.is_generating = False
         st.rerun()
 
-    # 生成中提示
     st.info("正在生成中，请稍候…")
 
     full_content = ""
@@ -380,25 +417,15 @@ if st.session_state.is_generating:
 
     placeholder.empty()
 
-    md_final = safety_filter(full_content)     # Markdown 原文
-    plain_final = to_plain_text(md_final)      # 富文本骨架
-    rich_html = build_rich_html(plain_final)   # 富文本HTML（保留字体字号）
+    # ✅ 生成完成：覆盖写入 session_state（下一次生成才会再替换）
+    md_final = safety_filter(full_content)
+    plain_final = to_plain_text(md_final)
+    rich_html_out = build_rich_html(plain_final)
 
-    st.subheader("🖨️ 1) 一键复制：保留字体字号（富文本）")
-    render_block_with_copy_rich(
-        rich_html=rich_html,
-        plain_fallback=plain_final,
-        title="富文本成品（小标题黑体18 / 正文宋体17）",
-        height_px=520
-    )
+    st.session_state.result_md = md_final
+    st.session_state.result_plain = plain_final
+    st.session_state.result_rich_html = rich_html_out
 
-    st.subheader("🧾 2) 一键复制：Markdown 原文")
-    render_block_with_copy_markdown(
-        md_text=md_final,
-        title="Markdown 原文（原样显示）",
-        height_px=520
-    )
-
-    # 完成：恢复按钮
+    # ✅ 恢复初始状态：按钮回“开始生成”，结果保留展示
     st.session_state.is_generating = False
     st.rerun()
