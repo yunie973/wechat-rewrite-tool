@@ -222,4 +222,143 @@ async function copyRich(){{
       const htmlBlob = new Blob([htmlText], {{ type: "text/html" }});
       const textBlob = new Blob([plainText], {{ type: "text/plain" }});
       const item = new ClipboardItem({{
-        "text/html":
+        "text/html": htmlBlob,
+        "text/plain": textBlob
+      }});
+      await navigator.clipboard.write([item]);
+      alert("已复制（保留字体字号）");
+      return;
+    }}
+  }} catch(e) {{}}
+
+  // 兼容：execCommand copy（可能复制为富文本）
+  try {{
+    const temp = document.createElement("div");
+    temp.setAttribute("contenteditable", "true");
+    temp.style.position = "fixed";
+    temp.style.left = "-9999px";
+    temp.innerHTML = htmlText;
+    document.body.appendChild(temp);
+
+    const range = document.createRange();
+    range.selectNodeContents(temp);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    document.execCommand("copy");
+    sel.removeAllRanges();
+    document.body.removeChild(temp);
+    alert("已复制（保留字体字号）");
+    return;
+  }} catch(e) {{}}
+
+  // 最后兜底：纯文本
+  try {{
+    await navigator.clipboard.writeText(plainText);
+    alert("已复制（降级为纯文本）");
+  }} catch(e) {{
+    alert("复制失败：请使用 HTTPS 或更换浏览器");
+  }}
+}}
+
+document.getElementById("copyBtn").addEventListener("click", copyRich);
+</script>
+""", height=height)
+
+
+def render_block_with_copy_markdown(md_text: str, title: str, height: int = 540):
+    """Markdown 原样显示 + 右上角复制（复制 text/plain）"""
+    md_esc = html.escape(md_text)
+    md_js = json.dumps(md_text)
+    title_esc = html.escape(title)
+
+    components.html(f"""
+<div style="position:relative;border:1px solid #07c160;border-radius:10px;background:#fff;padding:18px;">
+  <div style="font-weight:800;color:#000;margin:0 0 12px 0;font-family:Microsoft YaHei;">{title_esc}</div>
+
+  <button id="copyBtnMd"
+    style="position:absolute;top:12px;right:12px;background:#07c160;color:#fff;border:none;border-radius:8px;
+           padding:8px 12px;cursor:pointer;font-weight:800;">
+    📋 复制
+  </button>
+
+  <pre style="margin:0;white-space:pre-wrap;line-height:1.8;font-size:14px;
+              font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;
+              background:#ffffff;border-radius:8px;">{md_esc}</pre>
+</div>
+
+<script>
+async function copyMd(){{
+  const text = {md_js};
+  try {{
+    await navigator.clipboard.writeText(text);
+    alert("Markdown 已复制");
+  }} catch(e) {{
+    const el = document.createElement("textarea");
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+    alert("Markdown 已复制");
+  }}
+}}
+document.getElementById("copyBtnMd").addEventListener("click", copyMd);
+</script>
+""", height=height)
+
+
+# -----------------------------
+# 5) 页面逻辑
+# -----------------------------
+target_url = st.text_input("🔗 粘贴链接开始深度重构")
+
+if st.button("🚀 开始极速生成", type="primary"):
+    api_key = st.secrets.get("DEEPSEEK_API_KEY")
+
+    if not target_url:
+        st.error("请先粘贴链接。")
+    elif not api_key:
+        st.error("未检测到 DEEPSEEK_API_KEY，请在 .streamlit/secrets.toml 配置。")
+    else:
+        raw_text = get_article_content(target_url)
+        if not raw_text:
+            st.error("内容抓取失败")
+        else:
+            full_content = ""
+            placeholder = st.empty()
+
+            response = stream_ai_rewrite(raw_text, api_key)
+
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                chunk = line.decode('utf-8', errors='ignore').removeprefix('data: ').strip()
+                if chunk == "[DONE]":
+                    break
+                try:
+                    data = json.loads(chunk)
+                    full_content += data["choices"][0]["delta"].get("content", "")
+                    placeholder.markdown(safety_filter(full_content) + "▌")
+                except:
+                    continue
+
+            placeholder.empty()
+
+            md_final = safety_filter(full_content)     # Markdown 原文
+            plain_final = to_plain_text(md_final)      # 富文本骨架
+            rich_html = build_rich_html(plain_final)   # 富文本HTML（保留字号字体）
+
+            st.subheader("🖨️ 1) 一键复制：保留字体字号（富文本）")
+            render_block_with_copy_rich(
+                rich_html=rich_html,
+                plain_fallback=plain_final,
+                title="富文本成品（小标题黑体18 / 正文宋体17）"
+            )
+
+            st.subheader("🧾 2) 一键复制：Markdown 原文")
+            render_block_with_copy_markdown(
+                md_text=md_final,
+                title="Markdown 原文（原样显示）"
+            )
