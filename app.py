@@ -5,14 +5,20 @@ import json
 from bs4 import BeautifulSoup
 import re
 import html
+import time
 
-st.set_page_config(page_title="深度重构级专业工作台", layout="centered")
+# =============================
+# 0) Page
+# =============================
+st.set_page_config(page_title="高级原创二创助手", layout="centered")
 
-# ---------- 全局样式 ----------
+# =============================
+# 1) Theme + Tabs 文案常显
+# =============================
 st.markdown("""
 <style>
 :root, body, .stApp { color-scheme: light !important; }
-.stApp { background:#ffffff !important; color:#000000 !important; padding-bottom: 90px; }
+.stApp { background:#fff !important; color:#000 !important; padding-bottom: 90px; }
 
 h1 { color:#07c160 !important; font-family:"Microsoft YaHei"; text-align:center; font-weight:900; }
 
@@ -21,14 +27,21 @@ h1 { color:#07c160 !important; font-family:"Microsoft YaHei"; text-align:center;
   border-radius: 12px !important;
   background: #ffffff !important;
 }
-.stTextInput input { background:#fff !important; color:#000 !important; font-weight:700 !important; }
+.stTextInput input {
+  background:#fff !important;
+  color:#000 !important;
+  font-weight:700 !important;
+}
 
-/* tabs 始终可见 */
-.stTabs [data-baseweb="tab"] { font-size: 16px !important; font-weight: 900 !important; color:#111 !important; opacity:1 !important; }
-.stTabs [aria-selected="true"] { color:#07c160 !important; }
-.stTabs [data-baseweb="tab-border"] { background: rgba(7,193,96,0.25) !important; }
+div[data-baseweb="select"] > div{
+  background:#fff !important;
+  color:#000 !important;
+  border-radius:12px !important;
+  border:1px solid rgba(7,193,96,0.45) !important;
+}
+div[data-baseweb="slider"] * { color:#000 !important; }
 
-/* 绿色按钮 */
+/* 覆盖按钮为绿色 */
 div.stButton > button{
   background:#07c160 !important;
   color:#fff !important;
@@ -41,64 +54,238 @@ div.stButton > button{
 div.stButton > button:hover{ background:#06b457 !important; }
 div.stButton > button:disabled{ background:#9be4be !important; color:#fff !important; }
 
-/* 页脚 */
-.footer {
-  position: fixed; left: 0; bottom: 0; width: 100%;
-  background-color: white; padding: 12px 0; border-top: 2px solid #07c160;
-  z-index: 999; display: flex; justify-content: center; align-items: center; gap: 20px;
+/* Tabs：文字常显 */
+div[data-baseweb="tab-list"] button *{
+  opacity:1 !important;
+  visibility:visible !important;
+  display:inline !important;
+  font-size:16px !important;
+  font-weight:900 !important;
+  color:#000 !important;
 }
-.qr-item { color: #07c160; font-weight: bold; cursor: pointer; position: relative; }
-.qr-box {
-  display: none; position: absolute; bottom: 45px; left: 50%;
-  transform: translateX(-50%); width: 180px; background: white;
-  padding: 10px; border: 2px solid #07c160; border-radius: 10px; box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+div[data-baseweb="tab-list"] button[aria-selected="true"] *{ color:#07c160 !important; }
+div[data-baseweb="tab-list"]{ gap:12px !important; }
+
+/* Footer */
+.footer{
+  position:fixed; left:0; bottom:0; width:100%;
+  background:#fff; padding:12px 0; border-top:2px solid #07c160;
+  z-index:999; display:flex; justify-content:center; align-items:center; gap:20px;
 }
-.qr-item:hover .qr-box { display: block; }
+.qr-item{ color:#07c160; font-weight:900; cursor:pointer; position:relative; }
+.qr-box{
+  display:none; position:absolute; bottom:45px; left:50%;
+  transform:translateX(-50%); width:180px; background:#fff;
+  padding:10px; border:2px solid #07c160; border-radius:10px;
+  box-shadow:0 8px 25px rgba(0,0,0,0.2);
+}
+.qr-item:hover .qr-box{ display:block; }
+
+@media (max-width:768px){
+  h1{ font-size:26px !important; }
+  div.stButton > button{ height:50px !important; border-radius:12px !important; }
+  .stApp{ padding-bottom:20px !important; }
+  .footer{ position:relative !important; border-top:1px solid rgba(7,193,96,0.35) !important; padding:10px 0 !important; gap:12px !important; }
+  .qr-box{ width:150px !important; }
+}
 </style>
 
 <div class="footer">
   <span style="color:#000;">© 2026 <b>@兴洪</b> 版权所有</span>
   <div class="qr-item">📗 微信加我
-    <div class="qr-box">
-      <img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%;">
-    </div>
+    <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%;"></div>
   </div>
   <div class="qr-item">🪐 知识星球
-    <div class="qr-box">
-      <img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;">
-    </div>
+    <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;"></div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
 st.title("🛡️ 深度重构级专业工作台")
 
+# =============================
+# 2) session_state
+# =============================
+def ss_init(k, v):
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-# ---------- 工具函数 ----------
-def get_article_content(url: str):
-    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"}
-    try:
-        res = requests.get(url, headers=headers, timeout=12)
-        soup = BeautifulSoup(res.text, "html.parser")
-        content_div = soup.find("div", id="js_content")
-        return content_div.get_text(separator="\n", strip=True) if content_div else None
-    except:
-        return None
+ss_init("is_generating", False)
+ss_init("manual_text", "")
+ss_init("last_source_text", None)
+ss_init("last_error", None)
 
+# 生成结果
+ss_init("result_md", "")
+ss_init("result_plain", "")
+ss_init("result_rich_html", "")
 
-def stream_ai_rewrite(text: str, api_key: str, temperature: float = 0.8):
+# 编辑器输入（新生成会覆盖它）
+ss_init("editor_initial_html", "")
+ss_init("editor_version", 0)         # 每次新生成+1，用于通知前端覆盖 localStorage
+ss_init("jump_to_editor", False)     # 生成完自动跳到“手动排版”
+
+# =============================
+# 3) 文本处理：不乱删标点，标题强制换行
+# =============================
+def format_title_block(text: str) -> str:
+    marker = "【推荐爆款标题】"
+    if marker not in text:
+        return text
+
+    start = text.find(marker) + len(marker)
+    after = text[start:]
+
+    m1 = re.search(r"\n##\s*0[1-4]\.", after)
+    m2 = re.search(r"\n{3,}", after)
+    candidates = [m.start() for m in [m1, m2] if m]
+    if candidates:
+        end_idx = min(candidates)
+        title_block = after[:end_idx]
+        rest = after[end_idx:]
+    else:
+        title_block = after
+        rest = ""
+
+    raw_lines = [ln.strip() for ln in title_block.split("\n") if ln.strip()]
+
+    # 只用 ;；|｜/ 分割（不动逗号顿号等标点）
+    if len(raw_lines) < 5 and raw_lines:
+        joined = " ".join(raw_lines)
+        parts = re.split(r"(?:\s*[;；]\s*|\s*[|｜]\s*|\s*/\s*)", joined)
+        raw_lines = [p.strip() for p in parts if p.strip()]
+
+    titles = raw_lines[:5]
+    fixed = marker + "\n" + ("\n".join(titles)).strip() + "\n\n\n"
+    return text[:text.find(marker)] + fixed + rest.lstrip("\n")
+
+def replace_bushi_ershi(text: str) -> str:
+    pattern = re.compile(r"不是(?P<a>.{0,60}?)而是", flags=re.DOTALL)
+    def _repl(m):
+        return "不单是" + m.group("a") + "更是"
+    return pattern.sub(_repl, text)
+
+def safety_filter(text: str) -> str:
+    text = text.replace("\\n", "\n")
+    text = replace_bushi_ershi(text)
+    text = text.replace("——", " ").replace("—", " ")
+    text = re.sub(r'(\n?)(##\s*0[1-4]\.)', r'\n\n\2', text)
+    return format_title_block(text)
+
+def to_plain_text(md_text: str) -> str:
+    t = md_text
+    t = re.sub(r'^\s*##\s*', '', t, flags=re.MULTILINE)
+    t = re.sub(r'\*\*(.+?)\*\*', r'\1', t)
+    t = re.sub(r'\*(.+?)\*', r'\1', t)
+    t = re.sub(r'`(.+?)`', r'\1', t)
+    t = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', t)
+    return t
+
+def build_rich_html(plain_text: str) -> str:
+    lines = plain_text.split("\n")
+    parts = ['<div style="font-family:SimSun,宋体,serif;font-size:17px;line-height:2;color:#000;">']
+    prev_blank = False
+
+    for ln in lines:
+        if ln.strip() == "":
+            if prev_blank:
+                continue
+            prev_blank = True
+            parts.append('<p style="margin:0 0 14px 0; line-height:1;"><br/></p>')
+            continue
+
+        prev_blank = False
+        s = ln.strip()
+
+        # 小标题：01. / 【推荐爆款标题】
+        if re.match(r'^0[1-4]\.\s+.+$', s) or s == "【推荐爆款标题】":
+            parts.append(
+                f'<h2 style="margin:18px 0 8px 0;font-family:SimHei,黑体,sans-serif;'
+                f'font-size:18px;font-weight:800;border-left:5px solid #07c160;'
+                f'padding-left:10px;">{html.escape(s)}</h2>'
+            )
+        else:
+            parts.append(f'<p style="margin:0 0 14px 0;">{html.escape(ln)}</p>')
+
+    parts.append("</div>")
+    return "".join(parts)
+
+# =============================
+# 4) 抓取（尽量抗验证）
+# =============================
+VERIFY_KEYWORDS = ["环境异常", "访问过于频繁", "请在微信客户端打开", "请输入验证码", "安全验证", "验证后继续"]
+UA_LIST = [
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+]
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_page_cached(url: str, ua_idx: int):
+    headers = {"User-Agent": UA_LIST[ua_idx], "Accept-Language": "zh-CN,zh;q=0.9"}
+    res = requests.get(url, headers=headers, timeout=12)
+    return res.status_code, res.text
+
+def looks_like_verify_page(page_html: str) -> bool:
+    if not page_html:
+        return True
+    s = page_html[:20000]
+    return any(k in s for k in VERIFY_KEYWORDS)
+
+def extract_wechat_text(page_html: str):
+    soup = BeautifulSoup(page_html, "html.parser")
+    content_div = soup.find("div", id="js_content")
+    return content_div.get_text(separator="\n", strip=True) if content_div else None
+
+def get_article_text_smart(url: str):
+    last_hint = None
+    for attempt, ua_idx in enumerate([0, 1, 2], start=1):
+        try:
+            code, page_html = fetch_page_cached(url, ua_idx)
+            if code != 200:
+                last_hint = f"HTTP {code}（第{attempt}次）"
+                continue
+            if looks_like_verify_page(page_html):
+                last_hint = f"疑似验证/拦截页（第{attempt}次）"
+                continue
+            text = extract_wechat_text(page_html)
+            if not text:
+                last_hint = f"未找到 js_content（第{attempt}次）"
+                continue
+            return text, "来自链接抓取"
+        except requests.exceptions.Timeout:
+            last_hint = f"抓取超时（第{attempt}次）"
+        except requests.exceptions.RequestException as e:
+            last_hint = f"网络错误：{e}（第{attempt}次）"
+    return None, (last_hint or "抓取失败")
+
+# =============================
+# 5) DeepSeek 流式生成
+# =============================
+def length_to_max_tokens(mode: str) -> int:
+    return {"短": 1200, "中": 1800, "长": 2600}.get(mode, 1800)
+
+def length_to_hint(mode: str) -> str:
+    if mode == "短":
+        return "正文尽量精炼，信息密度高，控制在约900-1200字。"
+    if mode == "长":
+        return "正文更充分展开，增加细节与案例，控制在约1800-2400字。"
+    return "正文适中展开，控制在约1200-1800字。"
+
+def stream_ai_rewrite(text: str, api_key: str, temperature: float, length_mode: str):
     url = "https://api.deepseek.com/chat/completions"
-    system_prompt = """假设你是一个专业的自媒体作家。对下文进行二创。
+    system_prompt = f"""假设你是一个专业的自媒体作家。对下文进行二创。
 【原创加强建议】：句型词汇调整、内容拓展、避免关键词、结构逻辑调整、视角切换、重点聚焦、角度转换、避免直接引用。
 【核心禁令】：
 - 永远不要出现“不是....，而是”的句式。
 - 绝对不要出现破折号（——）。
 - 绝对禁止结构化：禁止使用列表、分点（如1.2.3.或●），保持段落连贯性。
 【输出结构】：
-1. 第一行写【推荐爆款标题】，接着输出5个爆款标题，每行一个（标题标点不要删）。
+1. 第一行写【推荐爆款标题】，接着输出5个爆款标题，每行一个（保留标题标点）。
 2. 标题区后空三行。
 3. 正文开头必须先写150字引入语。
 4. 小标题格式固定为 ## 01. XXX，总数控制在 2-4 个。
+【篇幅要求】：{length_to_hint(length_mode)}
 """
     payload = {
         "model": "deepseek-chat",
@@ -108,476 +295,518 @@ def stream_ai_rewrite(text: str, api_key: str, temperature: float = 0.8):
         ],
         "stream": True,
         "temperature": float(temperature),
+        "max_tokens": int(length_to_max_tokens(length_mode)),
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    return requests.post(url, headers=headers, json=payload, stream=True, timeout=60)
+    return requests.post(url, headers=headers, json=payload, stream=True, timeout=120)
 
+# =============================
+# 6) 自动跳到 tab
+# =============================
+def jump_to_tab_by_text(tab_text: str):
+    safe_text = json.dumps(tab_text)
+    components.html(f"""
+<script>
+(function(){{
+  const target = {safe_text};
+  const tabs = parent.document.querySelectorAll('button[data-baseweb="tab"]');
+  for (const b of tabs) {{
+    const t = (b.innerText || '').trim();
+    if (t.includes(target)) {{ b.click(); break; }}
+  }}
+}})();
+</script>
+""", height=0)
 
-def normalize_text(text: str) -> str:
-    if not text:
-        return ""
-    text = text.replace("\\n", "\n")
-    # 仅规避“不是..而是”句式，不动标点
-    text = re.sub(r"不是(.{0,40})而是", r"不单是\1更是", text)
-    text = re.sub(r"(【推荐爆款标题】)\s*", r"【推荐爆款标题】\n", text)
-    text = re.sub(r"(\n?)(##\s*0[1-4]\.)", r"\n\n\2", text)
-    return text.strip()
+# =============================
+# 7) 免Key编辑器（Quill）——复制按钮/工具栏固定
+# =============================
+def render_wechat_editor(initial_html: str, version: int):
+    init_js = json.dumps(initial_html or "")
+    ver_js = json.dumps(str(version))
 
+    components.html(f"""
+<link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+<script src="https://unpkg.com/turndown/dist/turndown.js"></script>
 
-def plain_to_rich_html(plain: str) -> str:
-    if not plain:
-        return ""
-    lines = plain.splitlines()
-    out = []
-    for ln in lines:
-        s = ln.strip()
-        if not s:
-            out.append("<p><br></p>")
-            continue
-        if s.startswith("##"):
-            title = html.escape(s.replace("##", "", 1).strip())
-            out.append(
-                "<p><span style='font-family:SimHei, \"Microsoft YaHei\", sans-serif; "
-                "font-size:18px; font-weight:700;'>%s</span></p>" % title
-            )
-        else:
-            out.append(
-                "<p><span style='font-family:SimSun, serif; font-size:17px;'>%s</span></p>"
-                % html.escape(s)
-            )
-    return "\n".join(out)
+<div id="wrap" style="border:1px solid #07c160;border-radius:12px;background:#fff;">
+  <!-- 顶部固定操作区 -->
+  <div id="topbar" style="position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid rgba(0,0,0,0.08);
+       padding:12px;border-top-left-radius:12px;border-top-right-radius:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div style="font-weight:900;font-family:Microsoft YaHei;color:#000;font-size:18px;">
+        公众号排版编辑器（所见即所得）
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnApply" style="background:#07c160;color:#fff;border:none;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:900;">✨ 一键排版</button>
+        <button id="btnCopyRich" style="background:#07c160;color:#fff;border:none;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:900;">📋 复制富文本</button>
+        <button id="btnCopyMd" style="background:#07c160;color:#fff;border:none;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:900;">🧾 复制Markdown</button>
+        <button id="btnClear" style="background:#f2f2f2;color:#000;border:1px solid rgba(0,0,0,0.12);border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:900;">🧹 清空</button>
+      </div>
+    </div>
 
+    <!-- 工具栏固定在 topbar 内 -->
+    <div id="toolbar" style="margin-top:10px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:6px 8px;">
+      <span class="ql-formats">
+        <button class="ql-undo" type="button">↶</button>
+        <button class="ql-redo" type="button">↷</button>
+      </span>
 
-# ---------- Session State ----------
-if "pending_generate" not in st.session_state:
-    st.session_state.pending_generate = False
-if "pending_payload" not in st.session_state:
-    st.session_state.pending_payload = {}
-if "is_generating" not in st.session_state:
-    st.session_state.is_generating = False
-if "last_plain" not in st.session_state:
-    st.session_state.last_plain = ""
-if "last_rich_html" not in st.session_state:
-    st.session_state.last_rich_html = ""
+      <span class="ql-formats">
+        <select class="ql-size">
+          <option value="14px">14px</option>
+          <option value="17px" selected>17px</option>
+          <option value="18px">18px</option>
+          <option value="22px">22px</option>
+        </select>
+      </span>
 
+      <span class="ql-formats">
+        <button class="ql-bold"></button>
+        <button class="ql-italic"></button>
+        <button class="ql-underline"></button>
+        <button class="ql-strike"></button>
+      </span>
 
-# ---------- 编辑器组件（Quill）----------
-def render_wechat_editor(initial_html: str):
-    safe_initial_json = json.dumps(initial_html or "")
+      <span class="ql-formats">
+        <select class="ql-color"></select>
+        <select class="ql-background"></select>
+        <button class="ql-clean"></button>
+      </span>
 
-    component_html = """
-<!doctype html><html><head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+      <span class="ql-formats">
+        <button class="ql-align" value=""></button>
+        <button class="ql-align" value="center"></button>
+        <button class="ql-align" value="right"></button>
+        <button class="ql-align" value="justify"></button>
+      </span>
 
-<style>
-body{margin:0;background:#fff;}
-.wrap{border:2px solid #07c160;border-radius:14px;padding:14px;background:#fff;font-family:"Microsoft YaHei",sans-serif;}
-.header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
-.title{font-size:18px;font-weight:900;color:#111;}
-.actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
-.btn{border:none;border-radius:10px;padding:10px 14px;font-weight:900;cursor:pointer;font-size:14px;}
-.btn-green{background:#07c160;color:#fff;}
-.btn-green:hover{background:#06b457;}
-.btn-ghost{background:#f3f5f7;color:#111;border:1px solid rgba(0,0,0,0.12);}
+      <span class="ql-formats">
+        <button class="ql-indent" value="-1"></button>
+        <button class="ql-indent" value="+1"></button>
+      </span>
 
-.toolbarRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0;}
-.field{display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;background:#fff;}
-.field label{font-size:12px;font-weight:900;color:#333;white-space:nowrap;}
-.field select,.field input{border:none;outline:none;font-size:14px;font-weight:900;background:transparent;}
-.field input{width:70px;}
+      <span class="ql-formats">
+        <button class="ql-list" value="ordered"></button>
+        <button class="ql-list" value="bullet"></button>
+        <button class="ql-blockquote"></button>
+        <button class="ql-code-block"></button>
+      </span>
 
-#editorShell{border:1px solid rgba(0,0,0,0.12);border-radius:12px;overflow:hidden;background:#fff;}
-#toolbar{background:#fff;position:sticky;top:0;z-index:5;border-bottom:1px solid rgba(0,0,0,0.10);}
-.toast{position:fixed;right:16px;top:16px;background:rgba(17,17,17,0.92);color:#fff;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:900;opacity:0;transform:translateY(-6px);transition:all .2s ease;z-index:9999;pointer-events:none;}
-.toast.show{opacity:1;transform:translateY(0);}
-
-/* 关键：保证编辑区一定有高度，不会塌陷 */
-.ql-container{min-height:420px;}
-.ql-editor{min-height:420px;line-height:2;padding:18px 16px;overflow-y:auto;}
-</style>
-</head>
-<body>
-<div class="toast" id="toast">完成</div>
-
-<div class="wrap">
-  <div class="header">
-    <div class="title">公众号排版编辑器（所见即所得）</div>
-    <div class="actions">
-      <button class="btn btn-green" id="btnFormat">✨ 一键排版</button>
-      <button class="btn btn-green" id="btnCopyRich">📋 复制富文本</button>
-      <button class="btn btn-green" id="btnCopyMd">🧾 复制Markdown</button>
-      <button class="btn btn-ghost" id="btnClear">🧹 清空</button>
+      <span class="ql-formats">
+        <button id="btnHr" type="button">—</button>
+        <button id="btnTable" type="button">▦</button>
+        <button id="btnEmoji" type="button">😊</button>
+      </span>
     </div>
   </div>
 
-  <div class="toolbarRow">
-    <div class="field">
-      <label>字体</label>
-      <select id="fontSelect">
-        <option value="wechat">公众号默认</option>
-        <option value="simsun">宋体</option>
-        <option value="simhei">黑体</option>
-        <option value="yahei">微软雅黑</option>
-        <option value="pingfang">苹方</option>
-        <option value="kaiti">楷体</option>
-        <option value="fangsong">仿宋</option>
-        <option value="arial">Arial</option>
-        <option value="times">Times New Roman</option>
-        <option value="georgia">Georgia</option>
-        <option value="courier">Courier New</option>
-        <option value="verdana">Verdana</option>
-        <option value="tahoma">Tahoma</option>
-        <option value="impact">Impact</option>
-        <option value="comic">Comic Sans MS</option>
-      </select>
+  <!-- 可滚动编辑区 -->
+  <div id="editorHost" style="padding:12px;">
+    <div id="editor" style="border:1px solid rgba(0,0,0,0.08);border-radius:12px;"></div>
+    <div style="margin-top:10px;color:#666;font-size:12px;line-height:1.6;">
+      提示：复制富文本可直接贴公众号后台；复制Markdown用于二次处理（不保证公众号完全等效渲染）。
     </div>
-
-    <div class="field">
-      <label>字号</label>
-      <input id="sizeInput" type="number" min="10" max="50" step="1" value="17" />
-      <span style="font-weight:900;color:#333;">px</span>
-    </div>
-
-    <div style="font-size:12px;color:#666;font-weight:900;">
-      提示：编辑区可滚动；工具栏/复制按钮固定在顶部。
-    </div>
-  </div>
-
-  <div id="editorShell">
-    <div id="toolbar"></div>
-    <div id="editor"></div>
-  </div>
-
-  <div style="margin-top:10px;color:#666;font-size:12px;font-weight:900;">
-    复制富文本用于直接粘贴公众号；复制Markdown用于你二次处理（公众号内不保证完全等效渲染）。
   </div>
 </div>
 
+<style>
+.ql-container {{ border:none !important; font-family:SimSun,宋体,serif; }}
+.ql-editor {{
+  min-height: 520px;
+  font-size: 17px;
+  line-height: 2;
+  color: #000;
+}}
+@media (max-width: 768px) {{
+  .ql-editor {{ min-height: 420px; }}
+}}
+</style>
+
 <script>
-  // 多 CDN 兜底加载（防止国内网络导致编辑器不出来）
-  function loadCSS(url){
-    return new Promise((res, rej)=>{
-      const l=document.createElement('link');
-      l.rel='stylesheet'; l.href=url;
-      l.onload=()=>res(url); l.onerror=()=>rej(url);
-      document.head.appendChild(l);
-    });
-  }
-  function loadJS(url){
-    return new Promise((res, rej)=>{
-      const s=document.createElement('script');
-      s.src=url; s.onload=()=>res(url); s.onerror=()=>rej(url);
-      document.head.appendChild(s);
-    });
-  }
+const INITIAL_HTML = {init_js};
+const VERSION = {ver_js};
 
-  const CSS_LIST = [
-    "https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css",
-    "https://unpkg.com/quill@1.3.7/dist/quill.snow.css",
-    "https://cdn.staticfile.org/quill/1.3.7/quill.snow.min.css"
-  ];
+const Size = Quill.import('attributors/style/size');
+Size.whitelist = ['14px','17px','18px','22px'];
+Quill.register(Size, true);
 
-  const JS_LIST = [
-    "https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js",
-    "https://unpkg.com/quill@1.3.7/dist/quill.min.js",
-    "https://cdn.staticfile.org/quill/1.3.7/quill.min.js"
-  ];
+const quill = new Quill('#editor', {{
+  theme: 'snow',
+  modules: {{
+    toolbar: '#toolbar',
+    history: {{ delay: 300, maxStack: 100, userOnly: true }}
+  }}
+}});
 
-  const TURNDOWN_LIST = [
-    "https://cdn.jsdelivr.net/npm/turndown@7.1.2/dist/turndown.js",
-    "https://unpkg.com/turndown@7.1.2/dist/turndown.js",
-    "https://cdn.staticfile.org/turndown/7.1.2/turndown.min.js"
-  ];
+// ============ 内容持久化（避免 rerun 丢编辑） ============
+const KEY_HTML = 'wechat_editor_html';
+const KEY_VER  = 'wechat_editor_ver';
 
-  const INITIAL_HTML = __INITIAL_HTML__;
+function setEditorHtml(h) {{
+  quill.clipboard.dangerouslyPasteHTML(h || "");
+}}
 
-  function showToast(msg){
-    const t=document.getElementById('toast');
-    t.textContent = msg || "完成";
-    t.classList.add('show');
-    setTimeout(()=>t.classList.remove('show'), 900);
-  }
+function getEditorRoot() {{
+  return document.querySelector('#editor .ql-editor');
+}}
 
-  async function tryLoad(list, loader){
-    let lastErr = null;
-    for(const u of list){
-      try{ await loader(u); return u; }catch(e){ lastErr=e; }
-    }
-    throw lastErr;
-  }
+function saveLocal() {{
+  const root = getEditorRoot();
+  if (!root) return;
+  localStorage.setItem(KEY_HTML, root.innerHTML || "");
+  localStorage.setItem(KEY_VER, VERSION);
+}}
 
-  function computeEditorHeight(){
-    const w = window.innerWidth || 1024;
-    const vh = window.innerHeight || 800;
-    let h = Math.round(vh * 0.55);
-    if (w <= 768) h = Math.max(360, Math.min(420, h));
-    else h = Math.max(520, Math.min(640, h));
-    return h;
-  }
+// 首次加载：若 localStorage 版本=当前版本 -> 读本地；否则用 INITIAL_HTML 覆盖并更新版本
+(function initContent(){{
+  const savedVer = localStorage.getItem(KEY_VER);
+  const savedHtml = localStorage.getItem(KEY_HTML);
 
-  function applyEditorHeight(){
-    const h = computeEditorHeight();
-    const container = document.querySelector('.ql-container');
-    const editor = document.querySelector('.ql-editor');
-    if(container) container.style.height = h + 'px';
-    if(editor) editor.style.height = h + 'px';
-  }
+  if (savedHtml && savedVer === VERSION) {{
+    setEditorHtml(savedHtml);
+  }} else {{
+    setEditorHtml(INITIAL_HTML);
+    localStorage.setItem(KEY_VER, VERSION);
+    localStorage.setItem(KEY_HTML, INITIAL_HTML || "");
+  }}
+}})();
 
-  function escapeHtml(s){
-    return String(s)
-      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
-  }
+// 编辑时节流保存
+let saveTimer = null;
+quill.on('text-change', function(){{
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveLocal, 400);
+}});
 
-  async function init(){
-    try{
-      await tryLoad([CSS_LIST[0]], loadCSS).catch(()=>{});
-      // CSS 兜底
-      for (let i=1;i<CSS_LIST.length;i++){
-        loadCSS(CSS_LIST[i]).catch(()=>{});
-      }
+// undo/redo
+document.querySelector('.ql-undo').addEventListener('click', () => quill.history.undo());
+document.querySelector('.ql-redo').addEventListener('click', () => quill.history.redo());
 
-      await tryLoad(JS_LIST, loadJS);
-      await tryLoad(TURNDOWN_LIST, loadJS);
+// HR
+document.getElementById('btnHr').addEventListener('click', () => {{
+  const range = quill.getSelection(true) || {{ index: quill.getLength() }};
+  quill.clipboard.dangerouslyPasteHTML(range.index, '<p><hr/></p>');
+}});
 
-      // toolbar（不带表格，保留 emoji/列表/引用等）
-      document.getElementById('toolbar').innerHTML = `
-        <span class="ql-formats">
-          <button class="ql-bold"></button>
-          <button class="ql-italic"></button>
-          <button class="ql-underline"></button>
-          <button class="ql-strike"></button>
-        </span>
-        <span class="ql-formats">
-          <select class="ql-color"></select>
-          <select class="ql-background"></select>
-        </span>
-        <span class="ql-formats">
-          <button class="ql-align" value=""></button>
-          <button class="ql-align" value="center"></button>
-          <button class="ql-align" value="right"></button>
-          <button class="ql-align" value="justify"></button>
-        </span>
-        <span class="ql-formats">
-          <button class="ql-list" value="ordered"></button>
-          <button class="ql-list" value="bullet"></button>
-          <button class="ql-indent" value="-1"></button>
-          <button class="ql-indent" value="+1"></button>
-        </span>
-        <span class="ql-formats">
-          <button class="ql-blockquote"></button>
-          <button class="ql-code-block"></button>
-          <button class="ql-link"></button>
-        </span>
-        <span class="ql-formats">
-          <button class="ql-clean"></button>
-        </span>
-      `;
+// 表格（基础2x2）
+document.getElementById('btnTable').addEventListener('click', () => {{
+  const range = quill.getSelection(true) || {{ index: quill.getLength() }};
+  const table = `
+    <table style="border-collapse:collapse;width:100%;margin:10px 0;">
+      <tr>
+        <td style="border:1px solid #ccc;padding:8px;">单元格</td>
+        <td style="border:1px solid #ccc;padding:8px;">单元格</td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #ccc;padding:8px;">单元格</td>
+        <td style="border:1px solid #ccc;padding:8px;">单元格</td>
+      </tr>
+    </table><p></p>`;
+  quill.clipboard.dangerouslyPasteHTML(range.index, table);
+}});
 
-      const Font = Quill.import('formats/font');
-      Font.whitelist = [
-        'wechat','simsun','simhei','yahei','pingfang','kaiti','fangsong',
-        'arial','times','georgia','courier','verdana','tahoma','impact','comic'
-      ];
-      Quill.register(Font, true);
+// 表情（基础）
+document.getElementById('btnEmoji').addEventListener('click', () => {{
+  const emojis = ['😀','😁','😂','🥹','😊','😍','👍','🔥','✅','⭐','📌','🧠'];
+  const pick = prompt('输入序号选择表情：\\n' + emojis.map((e,i)=>`${{i+1}}. ${{e}}`).join('\\n'));
+  const n = parseInt(pick||'');
+  if (!n || n<1 || n>emojis.length) return;
+  const range = quill.getSelection(true) || {{ index: quill.getLength() }};
+  quill.insertText(range.index, emojis[n-1]);
+}});
 
-      const quill = new Quill('#editor', {
-        theme: 'snow',
-        modules: { toolbar: '#toolbar', history: { delay: 500, maxStack: 200, userOnly: true } }
-      });
+// 一键排版：默认公众号风格 + 自动识别“01.”和“【推荐爆款标题】”
+function applyWechatLayout() {{
+  const root = getEditorRoot();
+  if (!root) return;
 
-      // 初始化后再算高度（避免 0 高度）
-      setTimeout(()=>{
-        applyEditorHeight();
-        window.addEventListener('resize', applyEditorHeight);
-      }, 50);
+  root.style.fontFamily = 'SimSun,宋体,serif';
+  root.style.fontSize = '17px';
+  root.style.lineHeight = '2';
+  root.style.color = '#000';
 
-      // 填入初始内容
-      if (INITIAL_HTML && INITIAL_HTML.trim().length > 0){
-        quill.clipboard.dangerouslyPasteHTML(INITIAL_HTML);
-      }else{
-        quill.clipboard.dangerouslyPasteHTML("<p><span style='font-family:SimSun,serif;font-size:17px;'>在这里开始编辑…</span></p>");
-      }
+  root.querySelectorAll('p').forEach(p => {{
+    p.style.margin = '0 0 14px 0';
+    p.style.fontFamily = 'SimSun,宋体,serif';
+    p.style.fontSize = '17px';
+    p.style.lineHeight = '2';
+    p.style.color = '#000';
+  }});
 
-      // 外部控件（方案A：只有字号输入框）
-      const fontSelect = document.getElementById('fontSelect');
-      const sizeInput = document.getElementById('sizeInput');
+  root.querySelectorAll('p').forEach(p => {{
+    const t = (p.innerText || '').trim();
+    if (/^0[1-4]\\.\\s+/.test(t) || t === "【推荐爆款标题】") {{
+      const h2 = document.createElement('h2');
+      h2.innerText = t;
+      h2.style.fontFamily = 'SimHei,黑体,sans-serif';
+      h2.style.fontSize = '18px';
+      h2.style.fontWeight = '800';
+      h2.style.margin = '18px 0 8px 0';
+      h2.style.borderLeft = '5px solid #07c160';
+      h2.style.paddingLeft = '10px';
+      h2.style.color = '#000';
+      p.replaceWith(h2);
+    }}
+  }});
 
-      function applyFont(v){ quill.format('font', v); }
-      function applySize(px){
-        const n = parseInt(String(px).replace('px',''), 10);
-        if (isNaN(n)) return;
-        const clamped = Math.min(50, Math.max(10, n));
-        quill.format('size', clamped + 'px');
-        sizeInput.value = clamped;
-      }
+  saveLocal();
+  alert('已应用公众号排版');
+}}
+document.getElementById('btnApply').addEventListener('click', applyWechatLayout);
 
-      fontSelect.addEventListener('change', ()=>applyFont(fontSelect.value));
-      sizeInput.addEventListener('input', ()=>applySize(sizeInput.value));
-      sizeInput.addEventListener('change', ()=>applySize(sizeInput.value));
-      sizeInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') applySize(sizeInput.value); });
+// 复制富文本（带 inline 样式）
+async function copyRichAll() {{
+  const root = getEditorRoot();
+  if (!root) return;
 
-      // 默认：宋体 17
-      applyFont('simsun');
-      applySize(17);
+  const clone = root.cloneNode(true);
+  clone.querySelectorAll('p').forEach(p => {{
+    p.style.margin = '0 0 14px 0';
+    p.style.fontFamily = 'SimSun,宋体,serif';
+    p.style.fontSize = '17px';
+    p.style.lineHeight = '2';
+    p.style.color = '#000';
+  }});
+  clone.querySelectorAll('h2').forEach(h2 => {{
+    h2.style.fontFamily = 'SimHei,黑体,sans-serif';
+    h2.style.fontSize = '18px';
+    h2.style.fontWeight = '800';
+    h2.style.margin = '18px 0 8px 0';
+    h2.style.borderLeft = '5px solid #07c160';
+    h2.style.paddingLeft = '10px';
+    h2.style.color = '#000';
+  }});
 
-      function oneKeyFormat(){
-        const ps = quill.root.querySelectorAll('p');
-        ps.forEach(p=>{
-          const txt=(p.innerText||'').trim();
-          if(!txt){ p.innerHTML="<br>"; return; }
-          if(txt.startsWith("##") || /^[0-9]{2}[\\.、]/.test(txt)){
-            const t = txt.replace(/^##\\s*/, '');
-            p.innerHTML = "<span style='font-family:SimHei, \"Microsoft YaHei\", sans-serif; font-size:18px; font-weight:700;'>" + escapeHtml(t) + "</span>";
-          }else{
-            const hasSpan = p.querySelector('span');
-            if(!hasSpan){
-              p.innerHTML = "<span style='font-family:SimSun, serif; font-size:17px;'>" + escapeHtml(txt) + "</span>";
-            }
-          }
-        });
-      }
+  const htmlText = `<div style="font-family:SimSun,宋体,serif;font-size:17px;line-height:2;color:#000;">${{clone.innerHTML}}</div>`;
+  const plainText = root.innerText || '';
 
-      async function copyRich(){
-        const htmlStr = quill.root.innerHTML;
-        const plainStr = quill.getText();
-        try{
-          if (navigator.clipboard && window.ClipboardItem){
-            const item = new ClipboardItem({
-              "text/html": new Blob([htmlStr], {type:"text/html"}),
-              "text/plain": new Blob([plainStr], {type:"text/plain"})
-            });
-            await navigator.clipboard.write([item]);
-          }else{
-            const temp=document.createElement('div');
-            temp.style.position='fixed'; temp.style.left='-9999px';
-            temp.innerHTML = htmlStr; document.body.appendChild(temp);
-            const range=document.createRange(); range.selectNodeContents(temp);
-            const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-            document.execCommand('copy'); sel.removeAllRanges(); document.body.removeChild(temp);
-          }
-          showToast("已复制富文本");
-        }catch(e){
-          showToast("复制失败");
-        }
-      }
+  try {{
+    if (navigator.clipboard && window.ClipboardItem) {{
+      const htmlBlob = new Blob([htmlText], {{ type: "text/html" }});
+      const textBlob = new Blob([plainText], {{ type: "text/plain" }});
+      const item = new ClipboardItem({{ "text/html": htmlBlob, "text/plain": textBlob }});
+      await navigator.clipboard.write([item]);
+      alert("已复制（富文本，保留样式）");
+      return;
+    }}
+  }} catch(e) {{}}
 
-      function copyMarkdown(){
-        const htmlStr = quill.root.innerHTML;
-        const turndown = new TurndownService({ headingStyle:'atx', codeBlockStyle:'fenced' });
-        let md = turndown.turndown(htmlStr);
-        md = md.replace(/\\n{3,}/g, "\\n\\n").trim();
-        if(navigator.clipboard){
-          navigator.clipboard.writeText(md).then(()=>showToast("已复制Markdown"));
-        }else{
-          const ta=document.createElement('textarea'); ta.value=md;
-          document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-          showToast("已复制Markdown");
-        }
-      }
+  try {{
+    const temp = document.createElement('div');
+    temp.setAttribute('contenteditable','true');
+    temp.style.position='fixed';
+    temp.style.left='-9999px';
+    temp.innerHTML = htmlText;
+    document.body.appendChild(temp);
 
-      function clearEditor(){ quill.setText(''); showToast("已清空"); }
+    const range = document.createRange();
+    range.selectNodeContents(temp);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
 
-      document.getElementById('btnFormat').onclick = ()=>{ oneKeyFormat(); showToast("已应用排版"); };
-      document.getElementById('btnCopyRich').onclick = copyRich;
-      document.getElementById('btnCopyMd').onclick = copyMarkdown;
-      document.getElementById('btnClear').onclick = clearEditor;
+    document.execCommand('copy');
+    sel.removeAllRanges();
+    document.body.removeChild(temp);
+    alert("已复制（富文本，保留样式）");
+  }} catch(e) {{
+    alert("复制失败：请使用 HTTPS 或更换浏览器");
+  }}
+}}
+document.getElementById('btnCopyRich').addEventListener('click', copyRichAll);
 
-    }catch(e){
-      document.body.innerHTML = "<div style='padding:16px;font-family:Microsoft YaHei;font-weight:900;color:#b00020'>编辑器资源加载失败（可能网络限制/CDN不可达）。建议开代理或换可访问 CDN。</div>";
-    }
-  }
+// 复制 Markdown（HTML -> Markdown）
+async function copyMarkdownAll() {{
+  const root = getEditorRoot();
+  if (!root) return;
 
-  init();
+  const htmlInner = root.innerHTML || '';
+  let md = '';
+  try {{
+    const service = new TurndownService({{
+      headingStyle:'atx',
+      codeBlockStyle:'fenced',
+      emDelimiter:'*'
+    }});
+    md = service.turndown(htmlInner);
+  }} catch(e) {{
+    md = root.innerText || '';
+  }}
+
+  try {{
+    await navigator.clipboard.writeText(md);
+    alert("已复制 Markdown");
+  }} catch(e) {{
+    const el = document.createElement("textarea");
+    el.value = md;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    alert("已复制 Markdown");
+  }}
+}}
+document.getElementById('btnCopyMd').addEventListener('click', copyMarkdownAll);
+
+// 清空
+document.getElementById('btnClear').addEventListener('click', () => {{
+  if (!confirm("确定清空编辑器内容？")) return;
+  quill.setText('');
+  localStorage.setItem(KEY_HTML, '');
+  localStorage.setItem(KEY_VER, VERSION);
+}});
 </script>
-</body></html>
-""".replace("__INITIAL_HTML__", safe_initial_json)
+""", height=860)
 
-    components.html(component_html, height=780, scrolling=True)
+# =============================
+# 8) UI Tabs
+# =============================
+tab_gen, tab_manual = st.tabs(["🚀 二创生成", "📝 手动排版"])
 
-
-# ---------- Tabs ----------
-tab_gen, tab_edit = st.tabs(["🚀 二创生成", "🧩 手动排版"])
-
-
-# ==========================
-# A) 二创生成页（两段式 rerun，按钮必变）
-# ==========================
 with tab_gen:
-    st.subheader("🔗 粘贴公众号链接开始生成")
-    url = st.text_input("链接", placeholder="https://mp.weixin.qq.com/s/xxxxx")
+    target_url = st.text_input("🔗 粘贴链接开始深度重构")
 
     with st.expander("高级设置（可选）", expanded=False):
-        temperature = st.slider("风格强度（temperature）", 0.2, 1.2, 0.8, 0.01)
+        st.markdown("**风格强度（temperature）**")
+        st.caption("越低越稳；越高越创意（更敢改但更易跑题）")
+        temperature = st.slider("风格强度（建议 0.70–0.85）", 0.5, 1.0, 0.8, 0.05)
 
-    # 关键：按钮文案由状态控制
-    btn_label = "正在生成中…" if st.session_state.is_generating else "开始生成"
-    clicked = st.button(btn_label, disabled=st.session_state.is_generating)
+        st.markdown("---")
+        length_mode = st.selectbox("篇幅", ["中", "短", "长"], index=0)
+        st.caption("短：更精炼；中：默认；长：更充分展开（更耗 tokens）")
 
-    # 第一步：只写状态 + rerun，让按钮立刻变化
+    with st.expander("抓取失败？这里可手动粘贴原文继续生成（可选）", expanded=False):
+        st.session_state.manual_text = st.text_area(
+            "📄 粘贴原文（抓不到链接时会用这里的内容）",
+            value=st.session_state.manual_text,
+            height=180,
+            placeholder="当公众号链接抓取失败时，把文章原文粘贴到这里再点“开始生成”。"
+        )
+
+    if st.session_state.last_error and not st.session_state.is_generating:
+        st.error(st.session_state.last_error)
+
+    btn_text = "正在生成中..." if st.session_state.is_generating else "开始生成"
+    clicked = st.button(btn_text, disabled=st.session_state.is_generating, key="gen_btn")
+
     if clicked and not st.session_state.is_generating:
-        st.session_state.pending_generate = True
-        st.session_state.pending_payload = {"url": url, "temperature": float(temperature)}
         st.session_state.is_generating = True
+        st.session_state.last_error = None
         st.rerun()
 
-    # 第二步：在“状态已变”的 rerun 中真正开始生成
-    if st.session_state.pending_generate and st.session_state.is_generating:
-        api_key = st.secrets.get("DEEPSEEK_API_KEY")
-        payload = st.session_state.pending_payload or {}
-        target_url = payload.get("url", "")
-        temp = payload.get("temperature", 0.8)
+    if st.session_state.is_generating:
+        st.info("正在生成中，请稍候…")
+        live_placeholder = st.empty()
 
-        if not api_key:
-            st.error("未配置 DEEPSEEK_API_KEY")
-            st.session_state.pending_generate = False
-            st.session_state.is_generating = False
-        elif not target_url:
-            st.error("请先粘贴链接")
-            st.session_state.pending_generate = False
-            st.session_state.is_generating = False
-        else:
-            with st.spinner("正在生成中…"):
-                raw = get_article_content(target_url)
-                if not raw:
-                    st.error("内容抓取失败（可能链接不可访问或反爬）")
+        try:
+            api_key = st.secrets.get("DEEPSEEK_API_KEY")
+            if not api_key:
+                st.session_state.last_error = "未检测到 DEEPSEEK_API_KEY，请在 .streamlit/secrets.toml 配置。"
+                st.session_state.is_generating = False
+                st.rerun()
+
+            # 取原文
+            source_text = None
+            if target_url.strip():
+                with st.spinner("正在抓取文章内容…"):
+                    text, hint = get_article_text_smart(target_url.strip())
+                if text:
+                    source_text = text
                 else:
-                    full = ""
-                    try:
-                        resp = stream_ai_rewrite(raw[:8000], api_key, temperature=temp)
-                        for line in resp.iter_lines():
-                            if not line:
-                                continue
-                            chunk = line.decode("utf-8", errors="ignore")
-                            if chunk.startswith("data: "):
-                                chunk = chunk[len("data: "):]
-                            if chunk.strip() == "[DONE]":
-                                break
-                            try:
-                                data = json.loads(chunk)
-                                delta = data["choices"][0]["delta"].get("content", "")
-                                if delta:
-                                    full += delta
-                            except:
-                                continue
-                    except Exception as e:
-                        st.error(f"生成失败：{e}")
+                    manual = (st.session_state.manual_text or "").strip()
+                    if manual:
+                        source_text = manual
+                    else:
+                        st.session_state.last_error = f"内容抓取失败：{hint}。你可以展开“手动粘贴原文”后再生成。"
+                        st.session_state.is_generating = False
+                        st.rerun()
+            else:
+                manual = (st.session_state.manual_text or "").strip()
+                if manual:
+                    source_text = manual
+                else:
+                    st.session_state.last_error = "请粘贴链接，或展开“手动粘贴原文”输入内容后再生成。"
+                    st.session_state.is_generating = False
+                    st.rerun()
 
-                    final_plain = normalize_text(full)
-                    st.session_state.last_plain = final_plain
-                    st.session_state.last_rich_html = plain_to_rich_html(final_plain)
-                    st.success("✅ 已生成完成，并已自动同步到「手动排版」编辑器里（去手动排版页即可编辑/复制）。")
+            st.session_state.last_source_text = source_text
 
-        # 收尾：恢复初始状态
-        st.session_state.pending_generate = False
-        st.session_state.is_generating = False
-        st.session_state.pending_payload = {}
+            # 调模型流式
+            full_content = ""
+            response = stream_ai_rewrite(
+                text=source_text,
+                api_key=api_key,
+                temperature=temperature,
+                length_mode=length_mode
+            )
 
+            if response.status_code != 200:
+                msg = response.text[:400] if response.text else ""
+                st.session_state.last_error = f"模型接口请求失败：HTTP {response.status_code}\n\n{msg}"
+                st.session_state.is_generating = False
+                st.rerun()
 
-# ==========================
-# B) 手动排版页（内容自动进编辑器）
-# ==========================
-with tab_edit:
-    st.subheader("🧩 手动排版（可滚动可编辑 + 一键复制）")
-    render_wechat_editor(st.session_state.last_rich_html)
+            last_render_len = 0
+            last_tick = time.time()
+
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                chunk = line.decode("utf-8", errors="ignore").removeprefix("data: ").strip()
+                if chunk == "[DONE]":
+                    break
+                try:
+                    data = json.loads(chunk)
+                    delta = data["choices"][0]["delta"].get("content", "")
+                    if not delta:
+                        continue
+                    full_content += delta
+
+                    now = time.time()
+                    if (len(full_content) - last_render_len >= 120) or (now - last_tick >= 0.35):
+                        last_render_len = len(full_content)
+                        last_tick = now
+                        live_placeholder.markdown(safety_filter(full_content) + "▌")
+                except:
+                    continue
+
+            live_placeholder.empty()
+
+            md_final = safety_filter(full_content)
+            plain_final = to_plain_text(md_final)
+            rich_html_out = build_rich_html(plain_final)
+
+            st.session_state.result_md = md_final
+            st.session_state.result_plain = plain_final
+            st.session_state.result_rich_html = rich_html_out
+
+            # ✅ 生成完：直接塞进编辑器 + 版本号+1（强制覆盖前端 localStorage）
+            st.session_state.editor_initial_html = rich_html_out
+            st.session_state.editor_version += 1
+
+            # ✅ 自动跳到手动排版
+            st.session_state.jump_to_editor = True
+
+            st.session_state.is_generating = False
+            st.session_state.last_error = None
+            st.rerun()
+
+        except Exception as e:
+            st.session_state.last_error = f"发生错误：{e}"
+            st.session_state.is_generating = False
+            st.rerun()
+
+    if (not st.session_state.is_generating) and st.session_state.editor_initial_html:
+        st.success("✅ 已生成完成，并已自动导入到「手动排版」编辑器。")
+
+with tab_manual:
+    st.subheader("🧩 手动排版（工具栏 + 一键排版 + 一键复制）")
+    # 页面只显示编辑器（复制/排版都在编辑器内部）
+    render_wechat_editor(st.session_state.editor_initial_html, st.session_state.editor_version)
+
+# 生成完自动跳 tab（放最后更稳）
+if st.session_state.jump_to_editor:
+    st.session_state.jump_to_editor = False
+    jump_to_tab_by_text("手动排版")
+
