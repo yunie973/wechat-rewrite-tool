@@ -9,7 +9,7 @@ import html
 # -----------------------------
 # 1) UI：微信绿 + 白底黑字
 # -----------------------------
-st.set_page_config(page_title="高级原创二创助手", layout="centered")
+st.set_page_config(page_title="文章二创助手", layout="centered")
 
 st.markdown("""
 <style>
@@ -67,7 +67,7 @@ div.stButton > button:disabled { background-color: #9be4be !important; color: #f
 </div>
 """, unsafe_allow_html=True)
 
-st.title("🛡️ 深度重构级专业工作台")
+st.title("文章深度重构工作台")
 
 # -----------------------------
 # 2) session_state（必须在 import 之后）
@@ -429,3 +429,4 @@ if st.session_state.is_generating:
     # ✅ 恢复初始状态：按钮回“开始生成”，结果保留展示
     st.session_state.is_generating = False
     st.rerun()
+
