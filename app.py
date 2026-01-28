@@ -1,9 +1,9 @@
-def render_block_with_copy_rich(rich_html: str, plain_fallback: str, title: str, height_px: int = 520):
+def render_block_with_copy_markdown(md_text: str, title: str, height_px: int = 520):
     """
-    富文本块：内容可滚动，复制按钮固定在容器右上角（不跟内容滚动）
+    Markdown 原文块：内容可滚动，复制按钮固定在容器右上角（不随内容滚动）
     """
-    rich_js = json.dumps(rich_html)
-    plain_js = json.dumps(plain_fallback)
+    md_esc = html.escape(md_text)
+    md_js = json.dumps(md_text)
     title_esc = html.escape(title)
 
     components.html(f"""
@@ -13,7 +13,7 @@ def render_block_with_copy_rich(rich_html: str, plain_fallback: str, title: str,
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
     <div style="font-weight:800;color:#000;font-family:Microsoft YaHei;">{title_esc}</div>
 
-    <button id="copyBtn"
+    <button id="copyBtnMd"
       style="background:#07c160;color:#fff;border:none;border-radius:8px;
              padding:8px 12px;cursor:pointer;font-weight:800;flex-shrink:0;">
       📋 复制
@@ -21,64 +21,32 @@ def render_block_with_copy_rich(rich_html: str, plain_fallback: str, title: str,
   </div>
 
   <!-- 可滚动内容区 -->
-  <div id="scrollArea"
+  <div id="scrollAreaMd"
        style="height:{height_px}px; overflow-y:auto; padding-right:6px;">
 
-    {rich_html}
+    <pre style="margin:0;white-space:pre-wrap;line-height:1.8;font-size:14px;
+                font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;
+                background:#ffffff;border-radius:8px;">{md_esc}</pre>
 
   </div>
 </div>
 
 <script>
-async function copyRich(){{
-  const htmlText = {rich_js};
-  const plainText = {plain_js};
-
+async function copyMd(){{
+  const text = {md_js};
   try {{
-    if (navigator.clipboard && window.ClipboardItem) {{
-      const htmlBlob = new Blob([htmlText], {{ type: "text/html" }});
-      const textBlob = new Blob([plainText], {{ type: "text/plain" }});
-      const item = new ClipboardItem({{
-        "text/html": htmlBlob,
-        "text/plain": textBlob
-      }});
-      await navigator.clipboard.write([item]);
-      alert("已复制（保留字体字号）");
-      return;
-    }}
-  }} catch(e) {{}}
-
-  // fallback：execCommand（可能复制富文本）
-  try {{
-    const temp = document.createElement("div");
-    temp.setAttribute("contenteditable", "true");
-    temp.style.position = "fixed";
-    temp.style.left = "-9999px";
-    temp.innerHTML = htmlText;
-    document.body.appendChild(temp);
-
-    const range = document.createRange();
-    range.selectNodeContents(temp);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-
-    document.execCommand("copy");
-    sel.removeAllRanges();
-    document.body.removeChild(temp);
-    alert("已复制（保留字体字号）");
-    return;
-  }} catch(e) {{}}
-
-  // 最后兜底：纯文本
-  try {{
-    await navigator.clipboard.writeText(plainText);
-    alert("已复制（降级为纯文本）");
+    await navigator.clipboard.writeText(text);
+    alert("Markdown 已复制");
   }} catch(e) {{
-    alert("复制失败：请使用 HTTPS 或更换浏览器");
+    const el = document.createElement("textarea");
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+    alert("Markdown 已复制");
   }}
 }}
-
-document.getElementById("copyBtn").addEventListener("click", copyRich);
+document.getElementById("copyBtnMd").addEventListener("click", copyMd);
 </script>
 """, height=height_px + 110)
