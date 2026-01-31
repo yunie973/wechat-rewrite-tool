@@ -15,7 +15,10 @@ st.set_page_config(page_title="高级原创二创助手", layout="centered")
 # =============================
 # 1) Theme + Tabs 文案常显（全局样式 + JS）
 # =============================
-st.markdown("""
+# =============================
+# 1) Theme + Tabs 文案常显（全局样式 + JS）
+# =============================
+st.markdown(r"""
 <style>
 :root, body, .stApp { color-scheme: light !important; }
 .stApp { background:#fff !important; color:#000 !important; }
@@ -111,9 +114,7 @@ div[data-testid="stNumberInput"] button{
   border:none !important;
   font-weight:900 !important;
 }
-div[data-testid="stNumberInput"] button:hover{
-  background:#06b457 !important;
-}
+div[data-testid="stNumberInput"] button:hover{ background:#06b457 !important; }
 div[data-testid="stNumberInput"] button + button{
   border-left: 1px solid rgba(255,255,255,0.25) !important;
 }
@@ -125,19 +126,23 @@ html, body, .stApp, * {
   text-rendering: optimizeLegibility;
 }
 
-/* ✅ Footer 固定 + 自动留白（JS 写入 --footerH） */
+/* ========= 关键：给 fixed footer 自动留白 ========= */
 :root{ --footerH: 0px; }
 
 /* 固定 footer */
 .footer{
-  position:fixed; left:0; bottom:0; width:100%;
+  position:fixed; left:0; right:0; bottom:0;
   background:#fff; padding:12px 0; border-top:2px solid #07c160;
   z-index:999; display:flex; justify-content:center; align-items:center; gap:20px;
 }
 
 /* ✅ 核心：内容区底部留白 = footer真实高度 + 额外空隙 */
 div[data-testid="stAppViewContainer"] .main .block-container{
-  padding-bottom: calc(var(--footerH) + 36px + env(safe-area-inset-bottom)) !important;
+  padding-bottom: calc(var(--footerH) + 40px + env(safe-area-inset-bottom)) !important;
+}
+/* 兼容一些老结构 */
+section.main .block-container{
+  padding-bottom: calc(var(--footerH) + 40px + env(safe-area-inset-bottom)) !important;
 }
 
 .qr-item{ color:#07c160; font-weight:900; cursor:pointer; position:relative; }
@@ -158,6 +163,7 @@ div[data-testid="stAppViewContainer"] .main .block-container{
 
 <script>
 (function () {
+  // 1) 滚轮落在数字框上时，不抢页面滚动
   function bindWheelBlur() {
     const inputs = document.querySelectorAll('input[type="number"]');
     inputs.forEach((inp) => {
@@ -166,8 +172,36 @@ div[data-testid="stAppViewContainer"] .main .block-container{
       inp.addEventListener('wheel', () => { inp.blur(); }, { passive: true });
     });
   }
-  bindWheelBlur();
-  setInterval(bindWheelBlur, 900);
+
+  // 2) 自动测量 footer 高度，写入 --footerH
+  function setFooterSpace(){
+    const footer = document.querySelector('.footer');
+    if(!footer) return;
+    const h = Math.ceil(footer.getBoundingClientRect().height || 0);
+    document.documentElement.style.setProperty('--footerH', h + 'px');
+  }
+
+  function init(){
+    bindWheelBlur();
+    setFooterSpace();
+    setTimeout(setFooterSpace, 200);
+    window.addEventListener('resize', setFooterSpace);
+
+    // ResizeObserver 更稳（footer 高度变化时自动更新）
+    try {
+      const footer = document.querySelector('.footer');
+      if (footer && window.ResizeObserver) {
+        const ro = new ResizeObserver(setFooterSpace);
+        ro.observe(footer);
+      }
+    } catch(e) {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
 </script>
 
@@ -180,24 +214,9 @@ div[data-testid="stAppViewContainer"] .main .block-container{
     <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;"></div>
   </div>
 </div>
-
-<!-- ✅ 自动测量 footer 高度，写入 --footerH -->
-<script>
-(function () {
-  function setFooterSpace(){
-    const footer = document.querySelector('.footer');
-    if(!footer) return;
-    const h = Math.ceil(footer.getBoundingClientRect().height || 0);
-    document.documentElement.style.setProperty('--footerH', h + 'px');
-  }
-  setFooterSpace();
-  setTimeout(setFooterSpace, 200);
-  setTimeout(setFooterSpace, 800);
-  window.addEventListener('resize', setFooterSpace);
-  setInterval(setFooterSpace, 1200);
-})();
-</script>
 """, unsafe_allow_html=True)
+
+st.title("🛡️ 深度重构级专业工作台")
 
 
 <!-- ✅ 解决：滚轮落在数字输入框上时页面不下滑（滚轮被用来改数字） -->
@@ -1074,6 +1093,7 @@ with tab_manual:
 if st.session_state.jump_to_editor:
     st.session_state.jump_to_editor = False
     jump_to_tab_by_text("手动排版")
+
 
 
 
