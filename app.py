@@ -182,7 +182,7 @@ html, body, .stApp, * {
 }
 /* ✅ 给固定 footer 预留空间，避免遮挡最后内容 */
 :root{
-  --footerH: 86px; /* 你 footer 的视觉高度，按需改：70~110 都行 */
+  --footerH: 200px; /* 你 footer 的视觉高度，按需改：70~110 都行 */
 }
 
 /* footer 固定到底部 */
@@ -1076,4 +1076,5 @@ with tab_manual:
 if st.session_state.jump_to_editor:
     st.session_state.jump_to_editor = False
     jump_to_tab_by_text("手动排版")
+
 
