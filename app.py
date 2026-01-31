@@ -20,13 +20,6 @@ st.markdown("""
 :root, body, .stApp { color-scheme: light !important; }
 .stApp { background:#fff !important; color:#000 !important; }
 
-
-
-/* ✅ 给底部 fixed footer 预留空间（关键：不然最后一截永远被盖住） */
-section.main .block-container{
-  padding-bottom: 220px !important;
-}
-
 /* 标题 */
 h1 { color:#07c160 !important; font-family:"Microsoft YaHei"; text-align:center; font-weight:900; }
 
@@ -42,7 +35,7 @@ h1 { color:#07c160 !important; font-family:"Microsoft YaHei"; text-align:center;
   font-weight:700 !important;
 }
 
-/* Select / Input（通用轻风格） */
+/* Select / Slider */
 div[data-baseweb="select"] > div{
   background:#fff !important;
   color:#000 !important;
@@ -51,7 +44,7 @@ div[data-baseweb="select"] > div{
 }
 div[data-baseweb="slider"] * { color:#000 !important; }
 
-/* 覆盖按钮为绿色 */
+/* 按钮 */
 div.stButton > button{
   background:#07c160 !important;
   color:#fff !important;
@@ -76,14 +69,12 @@ div[data-baseweb="tab-list"] button *{
 div[data-baseweb="tab-list"] button[aria-selected="true"] *{ color:#07c160 !important; }
 div[data-baseweb="tab-list"]{ gap:12px !important; }
 
-/* =========================
-   Expander（高级设置）白底 + 绿边
-   ========================= */
+/* Expander（高级设置） */
 div[data-testid="stExpander"] details{
   border: 1px solid rgba(7,193,96,0.35) !important;
   border-radius: 12px !important;
   background: #fff !important;
-  overflow: visible !important;   /* ✅ 不要 hidden，不然经常“像被截断” */
+  overflow: visible !important;
 }
 div[data-testid="stExpander"] summary{
   background: #f6fbf8 !important;
@@ -100,17 +91,13 @@ div[data-testid="stExpander"] details > div{
   padding: 14px !important;
 }
 
-/* =========================
-   NumberInput：白底输入框 + 右侧 -/+ 绿色（更强选择器，避免没命中）
-   ========================= */
+/* NumberInput：白底 + 绿按钮 */
 div[data-testid="stNumberInput"] div[data-baseweb="input"]{
   border: 2px solid #07c160 !important;
   border-radius: 12px !important;
   overflow: hidden !important;
   background:#fff !important;
 }
-
-/* 输入框：白底黑字（防发灰） */
 div[data-testid="stNumberInput"] input[type="number"]{
   background:#fff !important;
   color:#000 !important;
@@ -118,14 +105,6 @@ div[data-testid="stNumberInput"] input[type="number"]{
   font-weight: 900 !important;
   opacity: 1 !important;
 }
-
-/* placeholder */
-div[data-testid="stNumberInput"] input[type="number"]::placeholder{
-  color: rgba(0,0,0,0.35) !important;
-  -webkit-text-fill-color: rgba(0,0,0,0.35) !important;
-}
-
-/* -/+ 按钮：绿色底白字（多套选择器保证能覆盖） */
 div[data-testid="stNumberInput"] button{
   background:#07c160 !important;
   color:#fff !important;
@@ -135,18 +114,32 @@ div[data-testid="stNumberInput"] button{
 div[data-testid="stNumberInput"] button:hover{
   background:#06b457 !important;
 }
-
-/* - 和 + 分隔线（看起来更像一体） */
 div[data-testid="stNumberInput"] button + button{
   border-left: 1px solid rgba(255,255,255,0.25) !important;
 }
 
-/* Footer */
+/* 提升网页端清晰度 */
+html, body, .stApp, * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ✅ Footer 固定 + 自动留白（JS 写入 --footerH） */
+:root{ --footerH: 0px; }
+
+/* 固定 footer */
 .footer{
   position:fixed; left:0; bottom:0; width:100%;
   background:#fff; padding:12px 0; border-top:2px solid #07c160;
   z-index:999; display:flex; justify-content:center; align-items:center; gap:20px;
 }
+
+/* ✅ 核心：内容区底部留白 = footer真实高度 + 额外空隙 */
+div[data-testid="stAppViewContainer"] .main .block-container{
+  padding-bottom: calc(var(--footerH) + 36px + env(safe-area-inset-bottom)) !important;
+}
+
 .qr-item{ color:#07c160; font-weight:900; cursor:pointer; position:relative; }
 .qr-box{
   display:none; position:absolute; bottom:45px; left:50%;
@@ -156,51 +149,57 @@ div[data-testid="stNumberInput"] button + button{
 }
 .qr-item:hover .qr-box{ display:block; }
 
-/* 移动端：footer 变相对定位时，padding-bottom 也要对应缩小但不能为 0 */
 @media (max-width:768px){
   h1{ font-size:26px !important; }
   div.stButton > button{ height:50px !important; border-radius:12px !important; }
-
-  section.main .block-container{
-    padding-bottom: 120px !important;
-  }
-
-  .footer{
-    position:relative !important;
-    border-top:1px solid rgba(7,193,96,0.35) !important;
-    padding:10px 0 !important;
-    gap:12px !important;
-  }
   .qr-box{ width:150px !important; }
 }
-
-/* 提升网页端文字渲染清晰度 */
-html, body, .stApp, * {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
-/* ✅ 给固定 footer 预留空间，避免遮挡最后内容 */
-:root{
-  --footerH: 200px; /* 你 footer 的视觉高度，按需改：70~110 都行 */
-}
-
-/* footer 固定到底部 */
-.footer{
-  height: var(--footerH);
-}
-
-/* Streamlit 主内容容器底部留白 = footer高度 + 额外空隙 */
-div[data-testid="stAppViewContainer"] .main .block-container{
-  padding-bottom: calc(var(--footerH) + 40px) !important;
-}
-
-/* 有时 expander 展开后内部会有裁切，这里确保不截断 */
-div[data-testid="stExpander"] details{
-  overflow: visible !important;
-}
-
 </style>
+
+<!-- ✅ 滚轮落在数字框上时，不抢页面滚动 -->
+<script>
+(function () {
+  function bindWheelBlur() {
+    const inputs = document.querySelectorAll('input[type="number"]');
+    inputs.forEach((inp) => {
+      if (inp.__wheelBound) return;
+      inp.__wheelBound = true;
+      inp.addEventListener('wheel', () => { inp.blur(); }, { passive: true });
+    });
+  }
+  bindWheelBlur();
+  setInterval(bindWheelBlur, 900);
+})();
+</script>
+
+<div class="footer">
+  <span style="color:#000;">© 2026 <b>@兴洪</b> 版权所有</span>
+  <div class="qr-item">📗 微信加我
+    <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/wechat_qr.png.jpg" style="width:100%;"></div>
+  </div>
+  <div class="qr-item">🪐 知识星球
+    <div class="qr-box"><img src="https://raw.githubusercontent.com/yunie973/wechat-rewrite-tool/main/star_qr.png.jpg" style="width:100%;"></div>
+  </div>
+</div>
+
+<!-- ✅ 自动测量 footer 高度，写入 --footerH -->
+<script>
+(function () {
+  function setFooterSpace(){
+    const footer = document.querySelector('.footer');
+    if(!footer) return;
+    const h = Math.ceil(footer.getBoundingClientRect().height || 0);
+    document.documentElement.style.setProperty('--footerH', h + 'px');
+  }
+  setFooterSpace();
+  setTimeout(setFooterSpace, 200);
+  setTimeout(setFooterSpace, 800);
+  window.addEventListener('resize', setFooterSpace);
+  setInterval(setFooterSpace, 1200);
+})();
+</script>
+""", unsafe_allow_html=True)
+
 
 <!-- ✅ 解决：滚轮落在数字输入框上时页面不下滑（滚轮被用来改数字） -->
 <script>
@@ -1076,5 +1075,6 @@ with tab_manual:
 if st.session_state.jump_to_editor:
     st.session_state.jump_to_editor = False
     jump_to_tab_by_text("手动排版")
+
 
 
