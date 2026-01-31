@@ -156,7 +156,6 @@ div[data-testid="stAppViewContainer"] .main .block-container{
 }
 </style>
 
-<!-- ✅ 滚轮落在数字框上时，不抢页面滚动 -->
 <script>
 (function () {
   function bindWheelBlur() {
@@ -1075,6 +1074,7 @@ with tab_manual:
 if st.session_state.jump_to_editor:
     st.session_state.jump_to_editor = False
     jump_to_tab_by_text("手动排版")
+
 
 
 
