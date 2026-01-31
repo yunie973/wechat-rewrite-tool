@@ -97,6 +97,60 @@ html, body, .stApp, * {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
+/* NumberInput：输入数字强制黑色（解决发灰/看不清） */
+div[data-testid="stNumberInput"] label,
+div[data-testid="stNumberInput"] label p{
+  color:#000 !important;
+}
+
+div[data-testid="stNumberInput"] div[data-baseweb="input"] input{
+  color:#000 !important;
+  -webkit-text-fill-color:#000 !important;  /* ✅ 关键：Chrome 有时用这个导致发灰 */
+  opacity: 1 !important;
+  font-weight: 800 !important;
+}
+
+/* placeholder 也别太浅 */
+div[data-testid="stNumberInput"] div[data-baseweb="input"] input::placeholder{
+  color: rgba(0,0,0,0.35) !important;
+  -webkit-text-fill-color: rgba(0,0,0,0.35) !important;
+}
+
+/* 有些情况下 input 被认为 disabled/readonly，会变灰：强制恢复 */
+div[data-testid="stNumberInput"] div[data-baseweb="input"] input:disabled{
+  opacity: 1 !important;
+  color:#000 !important;
+  -webkit-text-fill-color:#000 !important;
+}
+/* NumberInput 右侧 -/+ 按钮：绿色主题 */
+div[data-testid="stNumberInput"] div[data-baseweb="input"] > div:last-child{
+  background: #07c160 !important;                 /* 绿色底 */
+  border-left: 1px solid rgba(255,255,255,0.25) !important;
+  border-top-right-radius: 12px !important;
+  border-bottom-right-radius: 12px !important;
+}
+
+/* -/+ 按钮本体 */
+div[data-testid="stNumberInput"] div[data-baseweb="input"] > div:last-child button{
+  background: transparent !important;
+  color: #fff !important;                         /* 白色符号 */
+  font-weight: 900 !important;
+  border: none !important;
+}
+
+/* hover/active */
+div[data-testid="stNumberInput"] div[data-baseweb="input"] > div:last-child:hover{
+  background: #06b457 !important;
+}
+div[data-testid="stNumberInput"] div[data-baseweb="input"] > div:last-child button:active{
+  transform: scale(0.96);
+}
+
+/* 让 - / + 之间的分隔更清楚一点 */
+div[data-testid="stNumberInput"] div[data-baseweb="input"] > div:last-child button + button{
+  border-left: 1px solid rgba(255,255,255,0.22) !important;
+}
+
 </style>
 
 <div class="footer">
@@ -979,3 +1033,4 @@ with tab_manual:
 if st.session_state.jump_to_editor:
     st.session_state.jump_to_editor = False
     jump_to_tab_by_text("手动排版")
+
