@@ -13,7 +13,7 @@ import time
 st.set_page_config(page_title="高级原创二创助手", layout="centered")
 
 # =============================
-# 1) Theme + Tabs 文案常显
+# 1) Theme + Tabs 文案常显（全局样式 + JS）
 # =============================
 st.markdown("""
 <style>
@@ -22,6 +22,7 @@ st.markdown("""
 
 h1 { color:#07c160 !important; font-family:"Microsoft YaHei"; text-align:center; font-weight:900; }
 
+/* TextInput */
 .stTextInput > div > div {
   border: 2px solid #07c160 !important;
   border-radius: 12px !important;
@@ -33,9 +34,8 @@ h1 { color:#07c160 !important; font-family:"Microsoft YaHei"; text-align:center;
   font-weight:700 !important;
 }
 
-/* Select / NumberInput 同风格 */
-div[data-baseweb="select"] > div,
-div[data-baseweb="input"] > div{
+/* Select / Input（通用轻风格） */
+div[data-baseweb="select"] > div{
   background:#fff !important;
   color:#000 !important;
   border-radius:12px !important;
@@ -68,6 +68,70 @@ div[data-baseweb="tab-list"] button *{
 div[data-baseweb="tab-list"] button[aria-selected="true"] *{ color:#07c160 !important; }
 div[data-baseweb="tab-list"]{ gap:12px !important; }
 
+/* =========================
+   Expander（高级设置）白底 + 绿边
+   ========================= */
+div[data-testid="stExpander"] details{
+  border: 1px solid rgba(7,193,96,0.35) !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  overflow: hidden !important;
+}
+div[data-testid="stExpander"] summary{
+  background: #f6fbf8 !important;
+  color: #000 !important;
+  padding: 12px 14px !important;
+  border-radius: 12px !important;
+  font-weight: 900 !important;
+}
+div[data-testid="stExpander"] summary:hover{
+  background: rgba(7,193,96,0.10) !important;
+}
+div[data-testid="stExpander"] details > div{
+  background:#fff !important;
+  padding: 14px !important;
+}
+
+/* =========================
+   NumberInput：白底输入框 + 右侧 -/+ 绿色
+   ========================= */
+div[data-testid="stNumberInput"] div[data-baseweb="input"]{
+  border: 2px solid #07c160 !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  background:#fff !important;
+}
+
+/* 输入框：白底黑字（防发灰） */
+div[data-testid="stNumberInput"] div[data-baseweb="input"] input{
+  background:#fff !important;
+  color:#000 !important;
+  -webkit-text-fill-color:#000 !important;
+  font-weight: 900 !important;
+  opacity: 1 !important;
+}
+
+/* placeholder */
+div[data-testid="stNumberInput"] div[data-baseweb="input"] input::placeholder{
+  color: rgba(0,0,0,0.35) !important;
+  -webkit-text-fill-color: rgba(0,0,0,0.35) !important;
+}
+
+/* -/+ 按钮：绿色底白字 */
+div[data-testid="stNumberInput"] div[data-baseweb="input"] button{
+  background:#07c160 !important;
+  color:#fff !important;
+  border:none !important;
+  font-weight:900 !important;
+}
+div[data-testid="stNumberInput"] div[data-baseweb="input"] button:hover{
+  background:#06b457 !important;
+}
+/* - 和 + 分隔线 */
+div[data-testid="stNumberInput"] div[data-baseweb="input"] button + button{
+  border-left: 1px solid rgba(255,255,255,0.25) !important;
+}
+
 /* Footer */
 .footer{
   position:fixed; left:0; bottom:0; width:100%;
@@ -97,61 +161,23 @@ html, body, .stApp, * {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
-/* NumberInput：输入数字强制黑色（解决发灰/看不清） */
-div[data-testid="stNumberInput"] label,
-div[data-testid="stNumberInput"] label p{
-  color:#000 !important;
-}
-
-div[data-testid="stNumberInput"] div[data-baseweb="input"] input{
-  color:#000 !important;
-  -webkit-text-fill-color:#000 !important;  /* ✅ 关键：Chrome 有时用这个导致发灰 */
-  opacity: 1 !important;
-  font-weight: 800 !important;
-}
-
-/* placeholder 也别太浅 */
-div[data-testid="stNumberInput"] div[data-baseweb="input"] input::placeholder{
-  color: rgba(0,0,0,0.35) !important;
-  -webkit-text-fill-color: rgba(0,0,0,0.35) !important;
-}
-
-/* 有些情况下 input 被认为 disabled/readonly，会变灰：强制恢复 */
-div[data-testid="stNumberInput"] div[data-baseweb="input"] input:disabled{
-  opacity: 1 !important;
-  color:#000 !important;
-  -webkit-text-fill-color:#000 !important;
-}
-/* NumberInput 右侧 -/+ 按钮：绿色主题 */
-div[data-testid="stNumberInput"] div[data-baseweb="input"] > div:last-child{
-  background: #07c160 !important;                 /* 绿色底 */
-  border-left: 1px solid rgba(255,255,255,0.25) !important;
-  border-top-right-radius: 12px !important;
-  border-bottom-right-radius: 12px !important;
-}
-
-/* -/+ 按钮本体 */
-div[data-testid="stNumberInput"] div[data-baseweb="input"] > div:last-child button{
-  background: transparent !important;
-  color: #fff !important;                         /* 白色符号 */
-  font-weight: 900 !important;
-  border: none !important;
-}
-
-/* hover/active */
-div[data-testid="stNumberInput"] div[data-baseweb="input"] > div:last-child:hover{
-  background: #06b457 !important;
-}
-div[data-testid="stNumberInput"] div[data-baseweb="input"] > div:last-child button:active{
-  transform: scale(0.96);
-}
-
-/* 让 - / + 之间的分隔更清楚一点 */
-div[data-testid="stNumberInput"] div[data-baseweb="input"] > div:last-child button + button{
-  border-left: 1px solid rgba(255,255,255,0.22) !important;
-}
-
 </style>
+
+<!-- ✅ 解决：滚轮落在数字输入框上时页面不下滑（滚轮被用来改数字） -->
+<script>
+(function () {
+  function bind() {
+    const inputs = document.querySelectorAll('input[type="number"]');
+    inputs.forEach((inp) => {
+      if (inp.__wheelBound) return;
+      inp.__wheelBound = true;
+      inp.addEventListener('wheel', () => { inp.blur(); }, { passive: true });
+    });
+  }
+  bind();
+  setInterval(bind, 800);
+})();
+</script>
 
 <div class="footer">
   <span style="color:#000;">© 2026 <b>@兴洪</b> 版权所有</span>
@@ -189,8 +215,7 @@ ss_init("editor_version", 0)         # 每次新生成+1，用于通知前端覆
 ss_init("jump_to_editor", False)     # 生成完自动跳到“手动排版”
 
 # =============================
-# 3) 文本处理：只做排版相关，不做“不是而是/破折号”替换
-#    ✅ “不是…而是”与“破折号”交给提示词约束 AI 避开
+# 3) 文本处理：只做排版相关（不做“不是而是/破折号”代码替换）
 # =============================
 def format_title_block(text: str) -> str:
     marker = "【推荐爆款标题】"
@@ -224,7 +249,6 @@ def format_title_block(text: str) -> str:
     return text[:text.find(marker)] + fixed + rest.lstrip("\n")
 
 def safety_filter(text: str) -> str:
-    # 只处理换行与标题块，不替换内容表达
     text = text.replace("\\n", "\n")
     text = re.sub(r'(\n?)(##\s*0[1-4]\.)', r'\n\n\2', text)
     return format_title_block(text)
@@ -254,7 +278,6 @@ def build_rich_html(plain_text: str) -> str:
         prev_blank = False
         s = ln.strip()
 
-        # 小标题：01. / 【推荐爆款标题】
         if re.match(r'^0[1-4]\.\s+.+$', s) or s == "【推荐爆款标题】":
             parts.append(
                 f'<h2 style="margin:18px 0 8px 0;font-family:SimHei,黑体,sans-serif;'
@@ -333,18 +356,12 @@ def words_to_hint(target_words: int) -> str:
     return f"正文尽量贴近目标字数：约{tw}字（允许浮动，参考区间{low}-{high}字）。"
 
 def words_to_max_tokens(target_words: int) -> int:
-    """
-    粗略换算：中文 1 字 ≈ 1 token 左右（会有偏差）。
-    这里给足余量，避免写不完；同时做上下限保护。
-    """
     tw = clamp_target_words(target_words)
-    est = int(tw * 2.2)  # 标题/引入/正文余量
-    return max(800, min(est, 4096))   # 如需更长可把 4096 调大
+    est = int(tw * 2.2)
+    return max(800, min(est, 4096))
 
 def stream_ai_rewrite(text: str, api_key: str, temperature: float, target_words: int):
     url = "https://api.deepseek.com/chat/completions"
-
-    # ✅ “不是…而是 / 破折号”只放在提示词里约束模型规避（不再用代码替换）
     system_prompt = f"""假设你是一个专业的自媒体作家。对下文进行二创。
 【原创加强建议】：句型词汇调整、内容拓展、避免关键词、结构逻辑调整、视角切换、重点聚焦、角度转换、避免直接引用。
 
@@ -392,8 +409,7 @@ def jump_to_tab_by_text(tab_text: str):
 """, height=0)
 
 # =============================
-# 7) 免Key编辑器（Quill）——复制按钮/工具栏固定
-#   ✅ 改动点都在这个函数里：删表格/删Tx(ql-clean)/表情120+/字体10+/字号10-50/可滚动到底部/去alert弹窗
+# 7) 免Key编辑器（Quill）
 # =============================
 def render_wechat_editor(initial_html: str, version: int):
     init_js = json.dumps(initial_html or "")
@@ -405,7 +421,6 @@ def render_wechat_editor(initial_html: str, version: int):
 <script src="https://unpkg.com/turndown/dist/turndown.js"></script>
 
 <div id="wrap" style="border:1px solid #07c160;border-radius:12px;background:#fff;">
-  <!-- 顶部固定操作区 -->
   <div id="topbar" style="position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid rgba(0,0,0,0.08);
        padding:12px;border-top-left-radius:12px;border-top-right-radius:12px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -429,14 +444,12 @@ def render_wechat_editor(initial_html: str, version: int):
       </div>
     </div>
 
-    <!-- 工具栏固定在 topbar 内 -->
     <div id="toolbar" style="margin-top:10px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:6px 8px;">
       <span class="ql-formats">
         <button class="ql-undo" type="button">↶</button>
         <button class="ql-redo" type="button">↷</button>
       </span>
 
-      <!-- ✅ 字体 10+（含公众号默认） -->
       <span class="ql-formats">
         <select class="ql-font">
           <option value="wechat" selected>公众号默认</option>
@@ -455,7 +468,6 @@ def render_wechat_editor(initial_html: str, version: int):
         </select>
       </span>
 
-      <!-- ✅ 字号自由 10-50px -->
       <span class="ql-formats" style="display:inline-flex;align-items:center;gap:6px;">
         <span style="font-weight:800;color:#000;font-size:12px;">字号</span>
         <input id="fontSizeInput" type="number" min="10" max="50" value="17"
@@ -501,11 +513,9 @@ def render_wechat_editor(initial_html: str, version: int):
     </div>
   </div>
 
-  <!-- 可滚动编辑区 -->
   <div id="editorHost" style="padding:12px;">
     <div id="editor" style="border:1px solid rgba(0,0,0,0.08);border-radius:12px;"></div>
 
-    <!-- 表情面板（可滚动） -->
     <div id="emojiPanel" style="display:none;margin-top:10px;border:1px solid rgba(0,0,0,0.10);border-radius:12px;padding:10px;background:#fff;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <div style="font-weight:900;color:#000;">表情库（120+）</div>
@@ -957,7 +967,6 @@ with tab_gen:
 
             st.session_state.last_source_text = source_text
 
-            # 调模型流式
             full_content = ""
             response = stream_ai_rewrite(
                 text=source_text,
@@ -1006,11 +1015,11 @@ with tab_gen:
             st.session_state.result_plain = plain_final
             st.session_state.result_rich_html = rich_html_out
 
-            # ✅ 生成完：直接塞进编辑器 + 版本号+1（强制覆盖前端 localStorage）
+            # 生成完：塞进编辑器 + 版本号+1（覆盖 localStorage）
             st.session_state.editor_initial_html = rich_html_out
             st.session_state.editor_version += 1
 
-            # ✅ 自动跳到手动排版
+            # 自动跳到手动排版
             st.session_state.jump_to_editor = True
 
             st.session_state.is_generating = False
@@ -1033,4 +1042,3 @@ with tab_manual:
 if st.session_state.jump_to_editor:
     st.session_state.jump_to_editor = False
     jump_to_tab_by_text("手动排版")
-
