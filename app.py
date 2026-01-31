@@ -33,7 +33,9 @@ h1 { color:#07c160 !important; font-family:"Microsoft YaHei"; text-align:center;
   font-weight:700 !important;
 }
 
-div[data-baseweb="select"] > div{
+/* Select / NumberInput 同风格 */
+div[data-baseweb="select"] > div,
+div[data-baseweb="input"] > div{
   background:#fff !important;
   color:#000 !important;
   border-radius:12px !important;
@@ -260,19 +262,31 @@ def get_article_text_smart(url: str):
     return None, (last_hint or "抓取失败")
 
 # =============================
-# 5) DeepSeek 流式生成
+# 5) DeepSeek 流式生成（按目标字数）
 # =============================
-def length_to_max_tokens(mode: str) -> int:
-    return {"短": 1200, "中": 1800, "长": 2600}.get(mode, 1800)
+def clamp_target_words(n: int) -> int:
+    try:
+        n = int(n)
+    except:
+        n = 1000
+    return max(200, n)
 
-def length_to_hint(mode: str) -> str:
-    if mode == "短":
-        return "正文尽量精炼，信息密度高，控制在约900-1200字。"
-    if mode == "长":
-        return "正文更充分展开，增加细节与案例，控制在约1800-2400字。"
-    return "正文适中展开，控制在约1200-1800字。"
+def words_to_hint(target_words: int) -> str:
+    tw = clamp_target_words(target_words)
+    low = int(tw * 0.85)
+    high = int(tw * 1.15)
+    return f"正文尽量贴近目标字数：约{tw}字（允许浮动，参考区间{low}-{high}字）。"
 
-def stream_ai_rewrite(text: str, api_key: str, temperature: float, length_mode: str):
+def words_to_max_tokens(target_words: int) -> int:
+    """
+    粗略换算：中文 1 字 ≈ 1 token 左右（会有偏差）。
+    这里给足余量，避免写不完；同时做上下限保护。
+    """
+    tw = clamp_target_words(target_words)
+    est = int(tw * 2.2)  # 标题/引入/正文余量
+    return max(800, min(est, 4096))   # 如需更长可把 4096 调大
+
+def stream_ai_rewrite(text: str, api_key: str, temperature: float, target_words: int):
     url = "https://api.deepseek.com/chat/completions"
     system_prompt = f"""假设你是一个专业的自媒体作家。对下文进行二创。
 【原创加强建议】：句型词汇调整、内容拓展、避免关键词、结构逻辑调整、视角切换、重点聚焦、角度转换、避免直接引用。
@@ -285,7 +299,7 @@ def stream_ai_rewrite(text: str, api_key: str, temperature: float, length_mode: 
 2. 标题区后空三行。
 3. 正文开头必须先写150字引入语。
 4. 小标题格式固定为 ## 01. XXX，总数控制在 2-4 个。
-【篇幅要求】：{length_to_hint(length_mode)}
+【篇幅要求】：{words_to_hint(target_words)}
 """
     payload = {
         "model": "deepseek-chat",
@@ -295,7 +309,7 @@ def stream_ai_rewrite(text: str, api_key: str, temperature: float, length_mode: 
         ],
         "stream": True,
         "temperature": float(temperature),
-        "max_tokens": int(length_to_max_tokens(length_mode)),
+        "max_tokens": int(words_to_max_tokens(target_words)),
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     return requests.post(url, headers=headers, json=payload, stream=True, timeout=120)
@@ -500,12 +514,10 @@ function computeEditorH() {{
   const w = window.innerWidth || 1024;
   const h = window.innerHeight || 900;
   if (w <= 768) {{
-    // 手机
     let val = Math.round(h * 0.52);
     val = Math.max(360, Math.min(420, val));
     document.documentElement.style.setProperty('--editorH', val + 'px');
   }} else {{
-    // 桌面
     let val = Math.round(h * 0.62);
     val = Math.max(520, Math.min(640, val));
     document.documentElement.style.setProperty('--editorH', val + 'px');
@@ -519,7 +531,6 @@ const Font = Quill.import('formats/font');
 Font.whitelist = ['wechat','simsun','simhei','yahei','pingfang','kaiti','fangsong','arial','helvetica','times','georgia','courier','monospace'];
 Quill.register(Font, true);
 
-// ✅ 允许任意 size（配合输入框 10-50）
 const SizeStyle = Quill.import('attributors/style/size');
 SizeStyle.whitelist = null;
 Quill.register(SizeStyle, true);
@@ -565,18 +576,15 @@ function saveLocal() {{
   }}
 }})();
 
-// 编辑时节流保存
 let saveTimer = null;
 quill.on('text-change', function(){{
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(saveLocal, 400);
 }});
 
-// undo/redo
 document.querySelector('.ql-undo').addEventListener('click', () => quill.history.undo());
 document.querySelector('.ql-redo').addEventListener('click', () => quill.history.redo());
 
-// HR
 document.getElementById('btnHr').addEventListener('click', () => {{
   const range = quill.getSelection(true) || {{ index: quill.getLength() }};
   quill.clipboard.dangerouslyPasteHTML(range.index, '<p><hr/></p>');
@@ -615,7 +623,6 @@ const EMOJIS = [
   '🥉','🚀','🛰️','🌈','☀️','🌙','⭐️','🌊','🍀','🌻','🌸','🍎','🍵','☕','🥗','🍜','🍣','🍰','🎵','🎬'
 ];
 
-// 建面板
 const emojiGrid = document.getElementById('emojiGrid');
 function buildEmojiGrid() {{
   emojiGrid.innerHTML = '';
@@ -648,7 +655,6 @@ document.getElementById('emojiClose').addEventListener('click', () => {{
   emojiPanel.style.display = 'none';
 }});
 
-// ===== 字体/字号默认值保持一致（新输入也能用） =====
 function getFontFamilyByKey(key) {{
   const map = {{
     wechat: '-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,"Microsoft YaHei",sans-serif',
@@ -678,7 +684,6 @@ function getToolbarSizePx() {{
   return clampSize(fontSizeInput.value);
 }}
 
-// ===== 一键排版：默认公众号风格 + 自动识别“01.”和“【推荐爆款标题】” =====
 function applyWechatLayout() {{
   const root = getEditorRoot();
   if (!root) return;
@@ -841,8 +846,14 @@ with tab_gen:
         temperature = st.slider("风格强度（建议 0.70–0.85）", 0.5, 1.0, 0.8, 0.05)
 
         st.markdown("---")
-        length_mode = st.selectbox("篇幅", ["中", "短", "长"], index=0)
-        st.caption("短：更精炼；中：默认；长：更充分展开（更耗 tokens）")
+        target_words = st.number_input(
+            "目标字数（默认1000，可点击输入）",
+            min_value=200,
+            value=1000,
+            step=100,
+            key="target_words"
+        )
+        st.caption("建议 800–2000；可随意输入。模型会尽量贴近目标字数（允许少量浮动）。")
 
     with st.expander("抓取失败？这里可手动粘贴原文继续生成（可选）", expanded=False):
         st.session_state.manual_text = st.text_area(
@@ -906,7 +917,7 @@ with tab_gen:
                 text=source_text,
                 api_key=api_key,
                 temperature=temperature,
-                length_mode=length_mode
+                target_words=int(target_words)
             )
 
             if response.status_code != 200:
@@ -970,7 +981,6 @@ with tab_gen:
 
 with tab_manual:
     st.subheader("🧩 手动排版（工具栏 + 一键排版 + 一键复制）")
-    # 页面只显示编辑器（复制/排版都在编辑器内部）
     render_wechat_editor(st.session_state.editor_initial_html, st.session_state.editor_version)
 
 # 生成完自动跳 tab（放最后更稳）
