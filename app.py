@@ -20,21 +20,7 @@ st.markdown("""
 :root, body, .stApp { color-scheme: light !important; }
 .stApp { background:#fff !important; color:#000 !important; }
 
-/* ✅ 让页面必然能滚动 */
-html, body{
-  overflow-y:auto !important;
-  height:auto !important;
-}
 
-/* Streamlit 容器：不要锁高度/锁滚动 */
-div[data-testid="stAppViewContainer"],
-div[data-testid="stAppViewContainer"] > div,
-div[data-testid="stMain"],
-section.main,
-.stApp{
-  height:auto !important;
-  overflow:visible !important;
-}
 
 /* ✅ 给底部 fixed footer 预留空间（关键：不然最后一截永远被盖住） */
 section.main .block-container{
@@ -194,6 +180,26 @@ html, body, .stApp, * {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
+/* ✅ 给固定 footer 预留空间，避免遮挡最后内容 */
+:root{
+  --footerH: 86px; /* 你 footer 的视觉高度，按需改：70~110 都行 */
+}
+
+/* footer 固定到底部 */
+.footer{
+  height: var(--footerH);
+}
+
+/* Streamlit 主内容容器底部留白 = footer高度 + 额外空隙 */
+div[data-testid="stAppViewContainer"] .main .block-container{
+  padding-bottom: calc(var(--footerH) + 40px) !important;
+}
+
+/* 有时 expander 展开后内部会有裁切，这里确保不截断 */
+div[data-testid="stExpander"] details{
+  overflow: visible !important;
+}
+
 </style>
 
 <!-- ✅ 解决：滚轮落在数字输入框上时页面不下滑（滚轮被用来改数字） -->
@@ -1070,3 +1076,4 @@ with tab_manual:
 if st.session_state.jump_to_editor:
     st.session_state.jump_to_editor = False
     jump_to_tab_by_text("手动排版")
+
