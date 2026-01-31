@@ -18,8 +18,30 @@ st.set_page_config(page_title="高级原创二创助手", layout="centered")
 st.markdown("""
 <style>
 :root, body, .stApp { color-scheme: light !important; }
-.stApp { background:#fff !important; color:#000 !important; padding-bottom: 90px; }
+.stApp { background:#fff !important; color:#000 !important; }
 
+/* ✅ 让页面必然能滚动 */
+html, body{
+  overflow-y:auto !important;
+  height:auto !important;
+}
+
+/* Streamlit 容器：不要锁高度/锁滚动 */
+div[data-testid="stAppViewContainer"],
+div[data-testid="stAppViewContainer"] > div,
+div[data-testid="stMain"],
+section.main,
+.stApp{
+  height:auto !important;
+  overflow:visible !important;
+}
+
+/* ✅ 给底部 fixed footer 预留空间（关键：不然最后一截永远被盖住） */
+section.main .block-container{
+  padding-bottom: 220px !important;
+}
+
+/* 标题 */
 h1 { color:#07c160 !important; font-family:"Microsoft YaHei"; text-align:center; font-weight:900; }
 
 /* TextInput */
@@ -75,7 +97,7 @@ div[data-testid="stExpander"] details{
   border: 1px solid rgba(7,193,96,0.35) !important;
   border-radius: 12px !important;
   background: #fff !important;
-  overflow: hidden !important;
+  overflow: visible !important;   /* ✅ 不要 hidden，不然经常“像被截断” */
 }
 div[data-testid="stExpander"] summary{
   background: #f6fbf8 !important;
@@ -93,7 +115,7 @@ div[data-testid="stExpander"] details > div{
 }
 
 /* =========================
-   NumberInput：白底输入框 + 右侧 -/+ 绿色
+   NumberInput：白底输入框 + 右侧 -/+ 绿色（更强选择器，避免没命中）
    ========================= */
 div[data-testid="stNumberInput"] div[data-baseweb="input"]{
   border: 2px solid #07c160 !important;
@@ -103,7 +125,7 @@ div[data-testid="stNumberInput"] div[data-baseweb="input"]{
 }
 
 /* 输入框：白底黑字（防发灰） */
-div[data-testid="stNumberInput"] div[data-baseweb="input"] input{
+div[data-testid="stNumberInput"] input[type="number"]{
   background:#fff !important;
   color:#000 !important;
   -webkit-text-fill-color:#000 !important;
@@ -112,23 +134,24 @@ div[data-testid="stNumberInput"] div[data-baseweb="input"] input{
 }
 
 /* placeholder */
-div[data-testid="stNumberInput"] div[data-baseweb="input"] input::placeholder{
+div[data-testid="stNumberInput"] input[type="number"]::placeholder{
   color: rgba(0,0,0,0.35) !important;
   -webkit-text-fill-color: rgba(0,0,0,0.35) !important;
 }
 
-/* -/+ 按钮：绿色底白字 */
-div[data-testid="stNumberInput"] div[data-baseweb="input"] button{
+/* -/+ 按钮：绿色底白字（多套选择器保证能覆盖） */
+div[data-testid="stNumberInput"] button{
   background:#07c160 !important;
   color:#fff !important;
   border:none !important;
   font-weight:900 !important;
 }
-div[data-testid="stNumberInput"] div[data-baseweb="input"] button:hover{
+div[data-testid="stNumberInput"] button:hover{
   background:#06b457 !important;
 }
-/* - 和 + 分隔线 */
-div[data-testid="stNumberInput"] div[data-baseweb="input"] button + button{
+
+/* - 和 + 分隔线（看起来更像一体） */
+div[data-testid="stNumberInput"] button + button{
   border-left: 1px solid rgba(255,255,255,0.25) !important;
 }
 
@@ -147,11 +170,21 @@ div[data-testid="stNumberInput"] div[data-baseweb="input"] button + button{
 }
 .qr-item:hover .qr-box{ display:block; }
 
+/* 移动端：footer 变相对定位时，padding-bottom 也要对应缩小但不能为 0 */
 @media (max-width:768px){
   h1{ font-size:26px !important; }
   div.stButton > button{ height:50px !important; border-radius:12px !important; }
-  .stApp{ padding-bottom:20px !important; }
-  .footer{ position:relative !important; border-top:1px solid rgba(7,193,96,0.35) !important; padding:10px 0 !important; gap:12px !important; }
+
+  section.main .block-container{
+    padding-bottom: 120px !important;
+  }
+
+  .footer{
+    position:relative !important;
+    border-top:1px solid rgba(7,193,96,0.35) !important;
+    padding:10px 0 !important;
+    gap:12px !important;
+  }
   .qr-box{ width:150px !important; }
 }
 
@@ -941,7 +974,6 @@ with tab_gen:
                 st.session_state.is_generating = False
                 st.rerun()
 
-            # 取原文
             source_text = None
             if target_url.strip():
                 with st.spinner("正在抓取文章内容…"):
@@ -1015,11 +1047,8 @@ with tab_gen:
             st.session_state.result_plain = plain_final
             st.session_state.result_rich_html = rich_html_out
 
-            # 生成完：塞进编辑器 + 版本号+1（覆盖 localStorage）
             st.session_state.editor_initial_html = rich_html_out
             st.session_state.editor_version += 1
-
-            # 自动跳到手动排版
             st.session_state.jump_to_editor = True
 
             st.session_state.is_generating = False
@@ -1038,7 +1067,6 @@ with tab_manual:
     st.subheader("🧩 手动排版（工具栏 + 一键排版 + 一键复制）")
     render_wechat_editor(st.session_state.editor_initial_html, st.session_state.editor_version)
 
-# 生成完自动跳 tab（放最后更稳）
 if st.session_state.jump_to_editor:
     st.session_state.jump_to_editor = False
     jump_to_tab_by_text("手动排版")
