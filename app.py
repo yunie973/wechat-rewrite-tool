@@ -90,6 +90,13 @@ div[data-baseweb="tab-list"]{ gap:12px !important; }
   .footer{ position:relative !important; border-top:1px solid rgba(7,193,96,0.35) !important; padding:10px 0 !important; gap:12px !important; }
   .qr-box{ width:150px !important; }
 }
+
+/* 提升网页端文字渲染清晰度 */
+html, body, .stApp, * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
 </style>
 
 <div class="footer">
@@ -128,7 +135,8 @@ ss_init("editor_version", 0)         # 每次新生成+1，用于通知前端覆
 ss_init("jump_to_editor", False)     # 生成完自动跳到“手动排版”
 
 # =============================
-# 3) 文本处理：不乱删标点，标题强制换行
+# 3) 文本处理：只做排版相关，不做“不是而是/破折号”替换
+#    ✅ “不是…而是”与“破折号”交给提示词约束 AI 避开
 # =============================
 def format_title_block(text: str) -> str:
     marker = "【推荐爆款标题】"
@@ -161,16 +169,9 @@ def format_title_block(text: str) -> str:
     fixed = marker + "\n" + ("\n".join(titles)).strip() + "\n\n\n"
     return text[:text.find(marker)] + fixed + rest.lstrip("\n")
 
-def replace_bushi_ershi(text: str) -> str:
-    pattern = re.compile(r"不是(?P<a>.{0,60}?)而是", flags=re.DOTALL)
-    def _repl(m):
-        return "不单是" + m.group("a") + "更是"
-    return pattern.sub(_repl, text)
-
 def safety_filter(text: str) -> str:
+    # 只处理换行与标题块，不替换内容表达
     text = text.replace("\\n", "\n")
-    text = replace_bushi_ershi(text)
-    text = text.replace("——", " ").replace("—", " ")
     text = re.sub(r'(\n?)(##\s*0[1-4]\.)', r'\n\n\2', text)
     return format_title_block(text)
 
@@ -288,13 +289,17 @@ def words_to_max_tokens(target_words: int) -> int:
 
 def stream_ai_rewrite(text: str, api_key: str, temperature: float, target_words: int):
     url = "https://api.deepseek.com/chat/completions"
+
+    # ✅ “不是…而是 / 破折号”只放在提示词里约束模型规避（不再用代码替换）
     system_prompt = f"""假设你是一个专业的自媒体作家。对下文进行二创。
 【原创加强建议】：句型词汇调整、内容拓展、避免关键词、结构逻辑调整、视角切换、重点聚焦、角度转换、避免直接引用。
-【核心禁令】：
-- 永远不要出现“不是....，而是”的句式。
-- 绝对不要出现破折号（——）。
+
+【硬性禁令（必须严格遵守）】
+- 永远不要出现“不是……而是……”的句式（任何变体都不行）。
+- 全文绝对不要出现破折号：—— 或 —（如果需要停顿，用逗号或句号）。
 - 绝对禁止结构化：禁止使用列表、分点（如1.2.3.或●），保持段落连贯性。
-【输出结构】：
+
+【输出结构】
 1. 第一行写【推荐爆款标题】，接着输出5个爆款标题，每行一个（保留标题标点）。
 2. 标题区后空三行。
 3. 正文开头必须先写150字引入语。
@@ -414,7 +419,6 @@ def render_wechat_editor(initial_html: str, version: int):
       <span class="ql-formats">
         <select class="ql-color"></select>
         <select class="ql-background"></select>
-        <!-- ✅ 删掉 Tx（清除格式）= 不再放 ql-clean -->
       </span>
 
       <span class="ql-formats">
@@ -438,7 +442,6 @@ def render_wechat_editor(initial_html: str, version: int):
 
       <span class="ql-formats">
         <button id="btnHr" type="button">—</button>
-        <!-- ✅ 删表格按钮 -->
         <button id="btnEmoji" type="button">😊</button>
       </span>
     </div>
@@ -461,7 +464,6 @@ def render_wechat_editor(initial_html: str, version: int):
 </div>
 
 <style>
-/* 字体映射：让下拉里的字体在编辑区真正生效 */
 .ql-font-wechat {{ font-family: -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,"Microsoft YaHei",sans-serif; }}
 .ql-font-simsun {{ font-family: SimSun,宋体,serif; }}
 .ql-font-simhei {{ font-family: SimHei,黑体,sans-serif; }}
@@ -476,7 +478,6 @@ def render_wechat_editor(initial_html: str, version: int):
 .ql-font-courier {{ font-family: "Courier New",Courier,monospace; }}
 .ql-font-monospace {{ font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; }}
 
-/* ✅ 让编辑区内部滚动（可到最底部） */
 :root {{
   --editorH: 600px;
 }}
@@ -509,7 +510,6 @@ function toast(msg) {{
   }}, 1600);
 }}
 
-// 依据屏幕动态算编辑区高度（手机 360~420；桌面 520~640）
 function computeEditorH() {{
   const w = window.innerWidth || 1024;
   const h = window.innerHeight || 900;
@@ -526,7 +526,6 @@ function computeEditorH() {{
 computeEditorH();
 window.addEventListener('resize', computeEditorH);
 
-// ===== Quill 注册：font + size(允许任意 px) =====
 const Font = Quill.import('formats/font');
 Font.whitelist = ['wechat','simsun','simhei','yahei','pingfang','kaiti','fangsong','arial','helvetica','times','georgia','courier','monospace'];
 Quill.register(Font, true);
@@ -543,7 +542,6 @@ const quill = new Quill('#editor', {{
   }}
 }});
 
-// ============ 内容持久化（避免 rerun 丢编辑） ============
 const KEY_HTML = 'wechat_editor_html';
 const KEY_VER  = 'wechat_editor_ver';
 
@@ -562,7 +560,6 @@ function saveLocal() {{
   localStorage.setItem(KEY_VER, VERSION);
 }}
 
-// 首次加载：若 localStorage 版本=当前版本 -> 读本地；否则用 INITIAL_HTML 覆盖并更新版本
 (function initContent(){{
   const savedVer = localStorage.getItem(KEY_VER);
   const savedHtml = localStorage.getItem(KEY_HTML);
@@ -591,7 +588,6 @@ document.getElementById('btnHr').addEventListener('click', () => {{
   toast('已插入分割线');
 }});
 
-// ===== 字号输入框：10-50px 应用到当前选择（或当前光标处） =====
 const fontSizeInput = document.getElementById('fontSizeInput');
 function clampSize(n) {{
   n = parseInt(n || '17', 10);
@@ -611,7 +607,6 @@ function applySizeFromInput() {{
 fontSizeInput.addEventListener('change', applySizeFromInput);
 fontSizeInput.addEventListener('blur', applySizeFromInput);
 
-// ===== 表情库：120+ 面板点选 =====
 const EMOJIS = [
   '😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','😘','🥰','😗','😙','😚','🙂','🤗',
   '🤩','🤔','🫡','🤨','😐','😑','😶','🫥','😶‍🌫️','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','🥱','😴',
@@ -725,7 +720,6 @@ function applyWechatLayout() {{
 }}
 document.getElementById('btnApply').addEventListener('click', applyWechatLayout);
 
-// ===== 复制富文本（带 inline 样式） =====
 async function copyRichAll() {{
   const root = getEditorRoot();
   if (!root) return;
@@ -788,7 +782,6 @@ async function copyRichAll() {{
 }}
 document.getElementById('btnCopyRich').addEventListener('click', copyRichAll);
 
-// ===== 复制 Markdown（HTML -> Markdown） =====
 async function copyMarkdownAll() {{
   const root = getEditorRoot();
   if (!root) return;
@@ -821,7 +814,6 @@ async function copyMarkdownAll() {{
 }}
 document.getElementById('btnCopyMd').addEventListener('click', copyMarkdownAll);
 
-// ===== 清空 =====
 document.getElementById('btnClear').addEventListener('click', () => {{
   if (!confirm("确定清空编辑器内容？")) return;
   quill.setText('');
