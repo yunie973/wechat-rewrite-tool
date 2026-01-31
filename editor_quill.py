@@ -1,13 +1,9 @@
+# editor_quill.py
 import json
 import streamlit.components.v1 as components
 
 
-def render_wechat_editor(initial_html: str, version: int):
-    init_js = json.dumps(initial_html or "")
-    ver_js = json.dumps(str(version))
-
-    components.html(
-        f"""
+_TEMPLATE = r"""
 <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
 <script src="https://unpkg.com/turndown/dist/turndown.js"></script>
@@ -120,73 +116,58 @@ def render_wechat_editor(initial_html: str, version: int):
 </div>
 
 <style>
-.ql-font-wechat {{ font-family: -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,"Microsoft YaHei",sans-serif; }}
-.ql-font-simsun {{ font-family: SimSun,宋体,serif; }}
-.ql-font-simhei {{ font-family: SimHei,黑体,sans-serif; }}
-.ql-font-yahei {{ font-family: "Microsoft YaHei","微软雅黑",sans-serif; }}
-.ql-font-pingfang {{ font-family: "PingFang SC","苹方",-apple-system,BlinkMacSystemFont,sans-serif; }}
-.ql-font-kaiti {{ font-family: KaiTi,楷体,serif; }}
-.ql-font-fangsong {{ font-family: FangSong,仿宋,serif; }}
-.ql-font-arial {{ font-family: Arial,sans-serif; }}
-.ql-font-helvetica {{ font-family: Helvetica,Arial,sans-serif; }}
-.ql-font-times {{ font-family: "Times New Roman",Times,serif; }}
-.ql-font-georgia {{ font-family: Georgia,serif; }}
-.ql-font-courier {{ font-family: "Courier New",Courier,monospace; }}
-.ql-font-monospace {{ font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; }}
+.ql-font-wechat { font-family: -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,"Microsoft YaHei",sans-serif; }
+.ql-font-simsun { font-family: SimSun,宋体,serif; }
+.ql-font-simhei { font-family: SimHei,黑体,sans-serif; }
+.ql-font-yahei { font-family: "Microsoft YaHei","微软雅黑",sans-serif; }
+.ql-font-pingfang { font-family: "PingFang SC","苹方",-apple-system,BlinkMacSystemFont,sans-serif; }
+.ql-font-kaiti { font-family: KaiTi,楷体,serif; }
+.ql-font-fangsong { font-family: FangSong,仿宋,serif; }
+.ql-font-arial { font-family: Arial,sans-serif; }
+.ql-font-helvetica { font-family: Helvetica,Arial,sans-serif; }
+.ql-font-times { font-family: "Times New Roman",Times,serif; }
+.ql-font-georgia { font-family: Georgia,serif; }
+.ql-font-courier { font-family: "Courier New",Courier,monospace; }
+.ql-font-monospace { font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; }
 
-:root {{
-  --editorH: 600px;
-}}
-#editor .ql-container {{
-  height: var(--editorH) !important;
-  border: none !important;
-}}
-#editor .ql-editor {{
+:root { --editorH: 600px; }
+#editor .ql-container { height: var(--editorH) !important; border: none !important; }
+#editor .ql-editor {
   height: 100% !important;
   overflow-y: auto !important;
   font-size: 17px;
   line-height: 2;
   color: #000;
   padding: 14px 14px !important;
-}}
-/* 让 toolbar 的 undo/redo 按钮稍微像按钮 */
-#toolbar .ql-undo, #toolbar .ql-redo, #btnHr, #btnEmoji {{
-  border:1px solid rgba(0,0,0,0.10);
-  border-radius:8px;
-  width:32px;
-  height:28px;
-  line-height:26px;
-}}
+}
 </style>
 
 <script>
-const INITIAL_HTML = {init_js};
-const VERSION = {ver_js};
+const INITIAL_HTML = __INIT__;
+const VERSION = __VER__;
 
-function toast(msg) {{
+function toast(msg) {
   const el = document.getElementById('toast');
   if (!el) return;
   el.textContent = msg || '完成';
   el.style.display = 'inline-block';
   clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(() => {{
-    el.style.display = 'none';
-  }}, 1600);
-}}
+  window.__toastTimer = setTimeout(() => { el.style.display = 'none'; }, 1600);
+}
 
-function computeEditorH() {{
+function computeEditorH() {
   const w = window.innerWidth || 1024;
   const h = window.innerHeight || 900;
-  if (w <= 768) {{
+  if (w <= 768) {
     let val = Math.round(h * 0.52);
     val = Math.max(360, Math.min(420, val));
     document.documentElement.style.setProperty('--editorH', val + 'px');
-  }} else {{
+  } else {
     let val = Math.round(h * 0.62);
     val = Math.max(520, Math.min(640, val));
     document.documentElement.style.setProperty('--editorH', val + 'px');
-  }}
-}}
+  }
+}
 computeEditorH();
 window.addEventListener('resize', computeEditorH);
 
@@ -198,76 +179,70 @@ const SizeStyle = Quill.import('attributors/style/size');
 SizeStyle.whitelist = null;
 Quill.register(SizeStyle, true);
 
-const quill = new Quill('#editor', {{
+const quill = new Quill('#editor', {
   theme: 'snow',
-  modules: {{
+  modules: {
     toolbar: '#toolbar',
-    history: {{ delay: 300, maxStack: 100, userOnly: true }}
-  }}
-}});
+    history: { delay: 300, maxStack: 100, userOnly: true }
+  }
+});
 
 const KEY_HTML = 'wechat_editor_html';
 const KEY_VER  = 'wechat_editor_ver';
 
-function setEditorHtml(h) {{
-  quill.clipboard.dangerouslyPasteHTML(h || "");
-}}
+function setEditorHtml(h) { quill.clipboard.dangerouslyPasteHTML(h || ""); }
+function getEditorRoot() { return document.querySelector('#editor .ql-editor'); }
 
-function getEditorRoot() {{
-  return document.querySelector('#editor .ql-editor');
-}}
-
-function saveLocal() {{
+function saveLocal() {
   const root = getEditorRoot();
   if (!root) return;
   localStorage.setItem(KEY_HTML, root.innerHTML || "");
   localStorage.setItem(KEY_VER, VERSION);
-}}
+}
 
-(function initContent(){{
+(function initContent(){
   const savedVer = localStorage.getItem(KEY_VER);
   const savedHtml = localStorage.getItem(KEY_HTML);
-
-  if (savedHtml && savedVer === VERSION) {{
+  if (savedHtml && savedVer === VERSION) {
     setEditorHtml(savedHtml);
-  }} else {{
+  } else {
     setEditorHtml(INITIAL_HTML);
     localStorage.setItem(KEY_VER, VERSION);
     localStorage.setItem(KEY_HTML, INITIAL_HTML || "");
-  }}
-}})();
+  }
+})();
 
 let saveTimer = null;
-quill.on('text-change', function(){{
+quill.on('text-change', function(){
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(saveLocal, 400);
-}});
+});
 
 document.querySelector('.ql-undo').addEventListener('click', () => quill.history.undo());
 document.querySelector('.ql-redo').addEventListener('click', () => quill.history.redo());
 
-document.getElementById('btnHr').addEventListener('click', () => {{
-  const range = quill.getSelection(true) || {{ index: quill.getLength() }};
+document.getElementById('btnHr').addEventListener('click', () => {
+  const range = quill.getSelection(true) || { index: quill.getLength() };
   quill.clipboard.dangerouslyPasteHTML(range.index, '<p><hr/></p>');
   toast('已插入分割线');
-}});
+});
 
 const fontSizeInput = document.getElementById('fontSizeInput');
-function clampSize(n) {{
+function clampSize(n) {
   n = parseInt(n || '17', 10);
   if (isNaN(n)) n = 17;
   if (n < 10) n = 10;
   if (n > 50) n = 50;
   return n;
-}}
-function applySizeFromInput() {{
+}
+function applySizeFromInput() {
   const n = clampSize(fontSizeInput.value);
   fontSizeInput.value = String(n);
-  const range = quill.getSelection(true) || {{ index: quill.getLength(), length: 0 }};
+  const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
   quill.setSelection(range.index, range.length, 'silent');
   quill.format('size', n + 'px');
   saveLocal();
-}}
+}
 fontSizeInput.addEventListener('change', applySizeFromInput);
 fontSizeInput.addEventListener('blur', applySizeFromInput);
 
@@ -283,9 +258,9 @@ const EMOJIS = [
 ];
 
 const emojiGrid = document.getElementById('emojiGrid');
-function buildEmojiGrid() {{
+function buildEmojiGrid() {
   emojiGrid.innerHTML = '';
-  EMOJIS.forEach(e => {{
+  EMOJIS.forEach(e => {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = e;
@@ -295,27 +270,25 @@ function buildEmojiGrid() {{
     b.style.borderRadius = '10px';
     b.style.padding = '6px 0';
     b.style.fontSize = '18px';
-    b.addEventListener('click', () => {{
-      const range = quill.getSelection(true) || {{ index: quill.getLength(), length: 0 }};
+    b.addEventListener('click', () => {
+      const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
       quill.insertText(range.index, e);
-      quill.setSelection(range.index + (e ? e.length : 1), 0);
+      quill.setSelection(range.index + 2, 0);
       saveLocal();
-    }});
+    });
     emojiGrid.appendChild(b);
-  }});
-}}
+  });
+}
 buildEmojiGrid();
 
 const emojiPanel = document.getElementById('emojiPanel');
-document.getElementById('btnEmoji').addEventListener('click', () => {{
+document.getElementById('btnEmoji').addEventListener('click', () => {
   emojiPanel.style.display = (emojiPanel.style.display === 'none' || !emojiPanel.style.display) ? 'block' : 'none';
-}});
-document.getElementById('emojiClose').addEventListener('click', () => {{
-  emojiPanel.style.display = 'none';
-}});
+});
+document.getElementById('emojiClose').addEventListener('click', () => { emojiPanel.style.display = 'none'; });
 
-function getFontFamilyByKey(key) {{
-  const map = {{
+function getFontFamilyByKey(key) {
+  const map = {
     wechat: '-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,"Microsoft YaHei",sans-serif',
     simsun: 'SimSun,宋体,serif',
     simhei: 'SimHei,黑体,sans-serif',
@@ -329,21 +302,18 @@ function getFontFamilyByKey(key) {{
     georgia: 'Georgia,serif',
     courier: '"Courier New",Courier,monospace',
     monospace: 'ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'
-  }};
+  };
   return map[key] || map.wechat;
-}}
+}
 
-function getToolbarFontKey() {{
+function getToolbarFontKey() {
   const sel = document.querySelector('#toolbar .ql-font');
   const v = (sel && sel.value) ? sel.value : 'wechat';
   return v;
-}}
+}
+function getToolbarSizePx() { return clampSize(fontSizeInput.value); }
 
-function getToolbarSizePx() {{
-  return clampSize(fontSizeInput.value);
-}}
-
-function applyWechatLayout() {{
+function applyWechatLayout() {
   const root = getEditorRoot();
   if (!root) return;
 
@@ -355,17 +325,17 @@ function applyWechatLayout() {{
   root.style.lineHeight = '2';
   root.style.color = '#000';
 
-  root.querySelectorAll('p').forEach(p => {{
+  root.querySelectorAll('p').forEach(p => {
     p.style.margin = '0 0 14px 0';
     p.style.fontFamily = getFontFamilyByKey(fontKey);
     p.style.fontSize = baseSize + 'px';
     p.style.lineHeight = '2';
     p.style.color = '#000';
-  }});
+  });
 
-  root.querySelectorAll('p').forEach(p => {{
+  root.querySelectorAll('p').forEach(p => {
     const t = (p.innerText || '').trim();
-    if (/^0[1-4]\\.\\s+/.test(t) || t === "【推荐爆款标题】") {{
+    if (/^0[1-4]\.\s+/.test(t) || t === "【推荐爆款标题】") {
       const h2 = document.createElement('h2');
       h2.innerText = t;
       h2.style.fontFamily = 'SimHei,黑体,sans-serif';
@@ -376,15 +346,15 @@ function applyWechatLayout() {{
       h2.style.paddingLeft = '10px';
       h2.style.color = '#000';
       p.replaceWith(h2);
-    }}
-  }});
+    }
+  });
 
   saveLocal();
   toast('已应用公众号排版');
-}}
+}
 document.getElementById('btnApply').addEventListener('click', applyWechatLayout);
 
-async function copyRichAll() {{
+async function copyRichAll() {
   const root = getEditorRoot();
   if (!root) return;
 
@@ -392,14 +362,14 @@ async function copyRichAll() {{
   const baseSize = getToolbarSizePx();
 
   const clone = root.cloneNode(true);
-  clone.querySelectorAll('p').forEach(p => {{
+  clone.querySelectorAll('p').forEach(p => {
     p.style.margin = '0 0 14px 0';
     p.style.fontFamily = getFontFamilyByKey(fontKey);
     p.style.fontSize = baseSize + 'px';
     p.style.lineHeight = '2';
     p.style.color = '#000';
-  }});
-  clone.querySelectorAll('h2').forEach(h2 => {{
+  });
+  clone.querySelectorAll('h2').forEach(h2 => {
     h2.style.fontFamily = 'SimHei,黑体,sans-serif';
     h2.style.fontSize = (Math.max(16, Math.min(22, baseSize + 1))) + 'px';
     h2.style.fontWeight = '800';
@@ -407,23 +377,24 @@ async function copyRichAll() {{
     h2.style.borderLeft = '5px solid #07c160';
     h2.style.paddingLeft = '10px';
     h2.style.color = '#000';
-  }});
+  });
 
+  // ✅ 这里就是你原来会炸的地方，现在不走 Python f-string，就不会被误解析
   const htmlText = `<div style="font-family:${getFontFamilyByKey(fontKey)};font-size:${baseSize}px;line-height:2;color:#000;">${clone.innerHTML}</div>`;
   const plainText = root.innerText || '';
 
-  try {{
-    if (navigator.clipboard && window.ClipboardItem) {{
-      const htmlBlob = new Blob([htmlText], {{ type: "text/html" }});
-      const textBlob = new Blob([plainText], {{ type: "text/plain" }});
-      const item = new ClipboardItem({{ "text/html": htmlBlob, "text/plain": textBlob }});
+  try {
+    if (navigator.clipboard && window.ClipboardItem) {
+      const htmlBlob = new Blob([htmlText], { type: "text/html" });
+      const textBlob = new Blob([plainText], { type: "text/plain" });
+      const item = new ClipboardItem({ "text/html": htmlBlob, "text/plain": textBlob });
       await navigator.clipboard.write([item]);
       toast("已复制富文本");
       return;
-    }}
-  }} catch(e) {{}}
+    }
+  } catch(e) {}
 
-  try {{
+  try {
     const temp = document.createElement('div');
     temp.setAttribute('contenteditable','true');
     temp.style.position='fixed';
@@ -440,33 +411,33 @@ async function copyRichAll() {{
     sel.removeAllRanges();
     document.body.removeChild(temp);
     toast("已复制富文本");
-  }} catch(e) {{
+  } catch(e) {
     toast("复制失败：请使用 HTTPS 或更换浏览器");
-  }}
-}}
+  }
+}
 document.getElementById('btnCopyRich').addEventListener('click', copyRichAll);
 
-async function copyMarkdownAll() {{
+async function copyMarkdownAll() {
   const root = getEditorRoot();
   if (!root) return;
 
   const htmlInner = root.innerHTML || '';
   let md = '';
-  try {{
-    const service = new TurndownService({{
+  try {
+    const service = new TurndownService({
       headingStyle:'atx',
       codeBlockStyle:'fenced',
       emDelimiter:'*'
-    }});
+    });
     md = service.turndown(htmlInner);
-  }} catch(e) {{
+  } catch(e) {
     md = root.innerText || '';
-  }}
+  }
 
-  try {{
+  try {
     await navigator.clipboard.writeText(md);
     toast("已复制 Markdown");
-  }} catch(e) {{
+  } catch(e) {
     const el = document.createElement("textarea");
     el.value = md;
     document.body.appendChild(el);
@@ -474,19 +445,24 @@ async function copyMarkdownAll() {{
     document.execCommand('copy');
     document.body.removeChild(el);
     toast("已复制 Markdown");
-  }}
-}}
+  }
+}
 document.getElementById('btnCopyMd').addEventListener('click', copyMarkdownAll);
 
-document.getElementById('btnClear').addEventListener('click', () => {{
+document.getElementById('btnClear').addEventListener('click', () => {
   if (!confirm("确定清空编辑器内容？")) return;
   quill.setText('');
   localStorage.setItem(KEY_HTML, '');
   localStorage.setItem(KEY_VER, VERSION);
   toast('已清空');
-}});
+});
 </script>
-""",
-        height=900,
-        scrolling=True,
-    )
+"""
+
+
+def render_wechat_editor(initial_html: str, version: int, height: int = 900):
+    init_js = json.dumps(initial_html or "")
+    ver_js = json.dumps(str(version))
+
+    html = _TEMPLATE.replace("__INIT__", init_js).replace("__VER__", ver_js)
+    components.html(html, height=height, scrolling=True)
