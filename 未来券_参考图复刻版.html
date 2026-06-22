@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>未来券 · 抱抱券</title>
+  <style>
+    :root { color-scheme: light; --ink:#5883b7; --line:#8eafd0; --paper:#fbf8f4; --stub:#cfddf0; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; padding:24px; background:#f2f7fb; color:#314d6c; font-family:"PingFang SC","Microsoft YaHei",sans-serif; }
+    .app { width:min(1240px,100%); margin:auto; }
+    .toolbar { display:grid; grid-template-columns:1.1fr .9fr 1.8fr .65fr; gap:10px; margin-bottom:18px; padding:14px; border:1px solid rgba(97,132,171,.18); border-radius:18px; background:rgba(255,255,255,.82); box-shadow:0 12px 34px rgba(66,94,125,.09); backdrop-filter:blur(12px); }
+    input,select,button { min-width:0; height:42px; padding:0 13px; border:1px solid #d9e3ed; border-radius:11px; background:#fff; color:#365574; font:14px inherit; outline:none; }
+    input:focus,select:focus { border-color:#88acd1; box-shadow:0 0 0 3px rgba(112,157,199,.14); }
+    button { cursor:pointer; border-color:#668eb8; background:#668eb8; color:#fff; font-weight:600; }
+    button:hover { background:#557da8; }
+    .wide { grid-column:span 2; }
+    .copy-row { grid-column:1/-1; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    .stage { padding:10px 0 26px; }
+    svg { display:block; width:100%; height:auto; overflow:visible; filter:drop-shadow(0 16px 20px rgba(66,87,111,.16)); }
+    .ticket-art + .ticket-art { margin-top:28px; }
+    #backUploadHit { cursor:pointer; }
+    .crop-modal[hidden] { display:none; }
+    .crop-modal { position:fixed; inset:0; z-index:100; display:grid; place-items:center; padding:20px; background:rgba(20,31,45,.72); backdrop-filter:blur(8px); }
+    .crop-card { width:min(920px,100%); padding:16px; border-radius:18px; background:#fff; box-shadow:0 24px 70px rgba(0,0,0,.28); }
+    .crop-title { margin:0 0 12px; font-size:16px; color:#365574; }
+    .crop-canvas-wrap { overflow:hidden; border-radius:12px; background:#18212c; }
+    #cropCanvas { display:block; width:100%; height:auto; cursor:grab; touch-action:none; }
+    #cropCanvas.dragging { cursor:grabbing; }
+    .crop-controls { display:grid; grid-template-columns:auto 1fr auto auto; gap:10px; align-items:center; margin-top:12px; }
+    .crop-controls input[type="range"] { width:100%; padding:0; border:0; }
+    .crop-controls button { min-width:96px; }
+    .crop-cancel { background:#fff; color:#607891; border-color:#d9e3ed; }
+    .help { grid-column:1/-1; color:#7890a8; font-size:12px; text-align:right; }
+    @media (max-width:800px) { body{padding:12px}.toolbar{grid-template-columns:1fr 1fr}.wide{grid-column:1/-1}.help{text-align:left}.copy-row{grid-template-columns:1fr} }
+    @media (max-width:460px) { .toolbar{grid-template-columns:1fr}.toolbar>*{grid-column:1!important} }
+    @media print { body{padding:0;background:#fff}.toolbar{display:none}.stage{padding:0}svg{filter:none} }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="toolbar" aria-label="票券内容设置">
+      <input id="titleInput" value="抱抱券" aria-label="券名" placeholder="券名">
+      <input id="enInput" value="HUG PASS" aria-label="英文名" placeholder="英文名">
+      <input id="tagInput" class="wide" value="所有坏情绪，都可以在这里靠岸" aria-label="说明文案" placeholder="说明文案">
+      <div class="copy-row">
+        <input id="collectionInput" value="FUTURE TICKET COLLECTION" aria-label="顶部英文" placeholder="顶部英文">
+        <input id="sideSloganInput" value="ONLY FOR YOU" aria-label="左侧竖排文案" placeholder="左侧竖排文案">
+        <input id="footerInput" value="FUTURE WITH YOU · 未来和你" aria-label="底部文案" placeholder="底部文案">
+      </div>
+      <input id="noInput" value="001" inputmode="numeric" maxlength="6" aria-label="编号" placeholder="编号">
+      <input id="dateInput" value="" aria-label="日期" placeholder="DATE（可留空）">
+      <input id="toInput" value="" aria-label="赠予" placeholder="TO（可留空）">
+      <input id="fromInput" value="" aria-label="来自" placeholder="FROM（可留空）">
+      <input id="validityInput" class="wide" value="只对你永久有效" aria-label="有效期文案" placeholder="有效期文案">
+      <select id="themeInput" aria-label="配色">
+        <option value="cream">奶油杏</option>
+        <option value="blue" selected>奶油蓝</option>
+        <option value="green">奶油绿</option>
+        <option value="pink">奶油粉</option>
+        <option value="purple">奶油紫</option>
+      </select>
+      <button id="exportBtn" type="button">下载正反面（ZIP）</button>
+      <div class="help">点击背面右侧区域上传并裁剪高清图片 · 印章颜色与券面主题同步</div>
+    </section>
+
+    <section class="stage">
+      <svg id="ticketSvg" class="ticket-art" viewBox="0 0 1600 800" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="未来券正面">
+        <defs>
+          <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fcf9f6"/><stop offset="1" stop-color="#faf7f2"/></linearGradient>
+          <linearGradient id="stub" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d4e0f1"/><stop offset="1" stop-color="#c8d8ec"/></linearGradient>
+          <pattern id="frontGrain" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="3" cy="5" r=".7" fill="#527fb3"/><circle cx="19" cy="17" r=".55" fill="#527fb3"/></pattern>
+          <filter id="soft" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="5"/></filter>
+          <filter id="frontWash" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="42"/></filter>
+          <clipPath id="ticketClip"><path d="M42 12 H1548 Q1580 12 1580 44 V206 A42 42 0 0 0 1580 290 V510 A42 42 0 0 0 1580 594 V756 Q1580 788 1548 788 H42 Q10 788 10 756 V44 Q10 12 42 12Z"/></clipPath>
+        </defs>
+
+        <path d="M42 12 H1548 Q1580 12 1580 44 V206 A42 42 0 0 0 1580 290 V510 A42 42 0 0 0 1580 594 V756 Q1580 788 1548 788 H42 Q10 788 10 756 V44 Q10 12 42 12Z" fill="#9cb0c6" opacity=".18" filter="url(#soft)" transform="translate(0 8)"/>
+        <g clip-path="url(#ticketClip)">
+          <rect x="10" y="12" width="1138" height="776" fill="url(#paper)"/>
+          <rect x="1148" y="12" width="432" height="776" fill="url(#stub)"/>
+          <ellipse cx="925" cy="160" rx="310" ry="155" fill="url(#stub)" opacity=".12" filter="url(#frontWash)"/>
+          <ellipse cx="270" cy="690" rx="260" ry="125" fill="url(#stub)" opacity=".10" filter="url(#frontWash)"/>
+          <rect x="10" y="12" width="1570" height="776" fill="url(#frontGrain)" opacity=".06"/>
+          <line x1="1148" y1="12" x2="1148" y2="788" stroke="#5e84ad" stroke-width="2" stroke-dasharray="8 10" opacity=".68"/>
+        </g>
+        <path d="M42 12 H1548 Q1580 12 1580 44 V206 A42 42 0 0 0 1580 290 V510 A42 42 0 0 0 1580 594 V756 Q1580 788 1548 788 H42 Q10 788 10 756 V44 Q10 12 42 12Z" fill="none" stroke="#dce3e8"/>
+
+        <!-- 主券内框：四角为内凹圆角 -->
+        <path d="M62 52 H1089 A28 28 0 0 0 1117 80 V720 A28 28 0 0 0 1089 748 H62 A28 28 0 0 0 34 720 V80 A28 28 0 0 0 62 52Z" fill="none" stroke="#93b0ca" stroke-width="2"/>
+
+        <!-- 左侧轻量竖排标记 -->
+        <line x1="98" y1="185" x2="98" y2="240" stroke="#8caccb" stroke-width="2" opacity=".62"/>
+        <text id="sideSloganText" x="98" y="275" text-anchor="middle" font-family="Georgia,serif" font-size="14" fill="#688eb7" opacity=".9"></text>
+        <line x1="98" y1="532" x2="98" y2="587" stroke="#8caccb" stroke-width="2" opacity=".62"/>
+
+        <!-- 主标题区 -->
+        <g id="mainContent" transform="translate(65 0)">
+        <text id="collectionText" x="585" y="104" text-anchor="middle" font-family="Georgia,serif" font-size="19" letter-spacing="9" fill="#6389b0">FUTURE TICKET COLLECTION</text>
+        <line x1="492" y1="136" x2="550" y2="136" stroke="#93aec7"/>
+        <text x="585" y="143" text-anchor="middle" font-family="Georgia,serif" font-size="20" fill="#7fa6ce">·</text>
+        <line x1="620" y1="136" x2="678" y2="136" stroke="#93aec7"/>
+
+        <text id="mainTitle" x="585" y="315" text-anchor="middle" font-family="Songti SC,STSong,SimSun,serif" font-size="104" font-weight="700" letter-spacing="20" fill="#527fb3">抱抱券</text>
+        <line x1="330" y1="382" x2="420" y2="382" stroke="#98b2ca"/>
+        <text id="mainEn" x="585" y="393" text-anchor="middle" font-family="Georgia,serif" font-size="30" font-weight="600" letter-spacing="18" fill="#527fb3">HUG PASS</text>
+        <line x1="750" y1="382" x2="840" y2="382" stroke="#98b2ca"/>
+
+        <!-- 温柔文案区：用浅色块把信息收成一个整体 -->
+        <rect x="275" y="435" width="620" height="102" rx="20" fill="url(#stub)" opacity=".23" stroke="#93b0ca" stroke-width="1.5"/>
+        <path d="M305 455 H375 M795 517 H865" stroke="#93b0ca" stroke-width="1.5" opacity=".35"/>
+        <text id="mainTag" x="585" y="497" text-anchor="middle" font-family="Songti SC,STSong,SimSun,serif" font-size="23" letter-spacing="10" fill="#4776a5">所有坏情绪，都可以在这里靠岸</text>
+        <line x1="433" y1="584" x2="512" y2="584" stroke="#9bb3c9"/>
+        <text x="585" y="592" text-anchor="middle" font-family="Georgia,serif" font-size="20" fill="#527fb3">·</text>
+        <line x1="658" y1="584" x2="737" y2="584" stroke="#9bb3c9"/>
+        <text id="validityText" x="585" y="634" text-anchor="middle" font-family="Songti SC,STSong,SimSun,serif" font-size="22" letter-spacing="12" fill="#4776a5">只对你永久有效</text>
+        <text id="footerText" x="585" y="690" text-anchor="middle" font-family="Georgia,serif" font-size="13" letter-spacing="8" fill="#6389b0" opacity=".8">FUTURE WITH YOU · 未来和你</text>
+        </g>
+
+        <g fill="#527fb3" opacity=".24">
+          <circle cx="245" cy="135" r="2"/><circle cx="270" cy="150" r="1.4"/><circle cx="1015" cy="645" r="1.8"/><circle cx="1040" cy="625" r="1.2"/>
+          <path d="M292 126 l3 8 8 3-8 3-3 8-3-8-8-3 8-3Z"/><path d="M995 665 l3 7 7 3-7 3-3 7-3-7-7-3 7-3Z"/>
+        </g>
+
+        <!-- 副券 -->
+        <text x="1362" y="100" text-anchor="middle" font-family="Georgia,serif" font-size="25" letter-spacing="8" fill="#4776a5">NO.</text>
+        <text id="sideNo" x="1362" y="190" text-anchor="middle" font-family="Georgia,serif" font-size="82" fill="#527fb3">001</text>
+        <line x1="1338" y1="218" x2="1386" y2="218" stroke="#8da9c2" opacity=".55"/>
+        <line x1="1282" y1="252" x2="1325" y2="252" stroke="#8da9c2"/>
+        <text x="1362" y="257" text-anchor="middle" font-family="Georgia,serif" font-size="20" fill="#6593bf">·</text>
+        <line x1="1399" y1="252" x2="1442" y2="252" stroke="#8da9c2"/>
+        <g fill="none" stroke="#8caccb" opacity=".14">
+          <circle cx="1538" cy="390" r="178"/><circle cx="1538" cy="390" r="132"/><circle cx="1538" cy="390" r="86"/>
+        </g>
+
+        <g font-family="Georgia,serif" font-size="18" letter-spacing="4" fill="#4776a5">
+          <text x="1208" y="350">TO.</text><text x="1208" y="420">FROM.</text><text x="1208" y="490">DATE.</text>
+        </g>
+        <g stroke="#6f94b8" stroke-dasharray="4 7" opacity=".7">
+          <line x1="1298" y1="347" x2="1511" y2="347"/><line x1="1298" y1="417" x2="1511" y2="417"/><line x1="1298" y1="487" x2="1511" y2="487"/>
+        </g>
+        <g font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#426f9d">
+          <text id="toText" x="1305" y="337"></text><text id="fromText" x="1305" y="407"></text><text id="dateText" x="1305" y="477"></text>
+        </g>
+
+        <!-- 邮戳式认证章：轻盈折纸飞机、双圆环与波浪邮戳线 -->
+        <g id="stampMark" transform="translate(0 14)" opacity=".76">
+          <g fill="none" stroke="#6d94ba" stroke-linecap="round">
+            <circle cx="1348" cy="614" r="74" stroke-width="2.6" stroke-dasharray="21 1 10 1.5 17 1"/>
+            <circle cx="1348" cy="614" r="68" stroke-width="1.5"/>
+            <circle cx="1348" cy="614" r="60" stroke-width="1" stroke-dasharray="12 3" opacity=".64"/>
+            <g transform="rotate(28 1348 614)">
+              <path d="M1411 587 C1424 580 1436 594 1449 587 S1474 580 1487 587 S1512 594 1525 587" stroke-width="1.8"/>
+              <path d="M1414 602 C1427 595 1439 609 1452 602 S1477 595 1490 602 S1515 609 1528 602" stroke-width="1.8"/>
+              <path d="M1414 617 C1427 610 1439 624 1452 617 S1477 610 1490 617 S1515 624 1528 617" stroke-width="1.8"/>
+              <path d="M1411 632 C1424 625 1436 639 1449 632 S1474 625 1487 632 S1512 639 1525 632" stroke-width="1.4" opacity=".7"/>
+            </g>
+          </g>
+          <g transform="translate(-12 14)">
+            <path d="M1307 603 L1392 570 L1356 631 L1346 608 Z" fill="#527fb3" opacity=".09"/>
+            <g fill="none" stroke="#527fb3" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1307 603 L1392 570 L1356 631 L1346 608 Z"/>
+              <path d="M1307 603 L1346 608 L1392 570"/>
+              <path d="M1346 608 L1356 631 L1364 612"/>
+            </g>
+          </g>
+          <g fill="#527fb3">
+            <path d="M1316 632 l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5Z"/>
+            <path d="M1383 636 l1.3 3.4 3.4 1.3-3.4 1.3-1.3 3.4-1.3-3.4-3.4-1.3 3.4-1.3Z"/>
+            <path d="M1324 579 l1.1 2.9 2.9 1.1-2.9 1.1-1.1 2.9-1.1-2.9-2.9-1.1 2.9-1.1Z"/>
+          </g>
+        </g>
+      </svg>
+
+      <!-- 纯视觉背面：左侧副券 + 星光无限轨迹 -->
+      <svg id="ticketBackSvg" class="ticket-art" viewBox="0 0 1600 800" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="未来券背面">
+        <defs>
+          <linearGradient id="backPaper" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fcf9f6"/><stop offset="1" stop-color="#faf7f2"/></linearGradient>
+          <linearGradient id="backStub" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d4e0f1"/><stop offset="1" stop-color="#c8d8ec"/></linearGradient>
+          <pattern id="backGrain" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="3" cy="5" r=".7" fill="#527fb3"/><circle cx="19" cy="17" r=".55" fill="#527fb3"/></pattern>
+          <filter id="backSoft" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="5"/></filter>
+          <filter id="backGlow" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="48"/></filter>
+          <clipPath id="backClip"><path d="M42 12 H1548 Q1580 12 1580 44 V756 Q1580 788 1548 788 H42 Q10 788 10 756 V594 A42 42 0 0 0 10 510 V290 A42 42 0 0 0 10 206 V44 Q10 12 42 12Z"/></clipPath>
+          <clipPath id="backPhotoClip"><rect x="480" y="52" width="1076" height="696" rx="28"/></clipPath>
+        </defs>
+        <path d="M42 12 H1548 Q1580 12 1580 44 V756 Q1580 788 1548 788 H42 Q10 788 10 756 V594 A42 42 0 0 0 10 510 V290 A42 42 0 0 0 10 206 V44 Q10 12 42 12Z" fill="#9cb0c6" opacity=".18" filter="url(#backSoft)" transform="translate(0 8)"/>
+        <g clip-path="url(#backClip)">
+          <rect x="10" y="12" width="442" height="776" fill="url(#backStub)"/>
+          <rect x="452" y="12" width="1128" height="776" fill="url(#backPaper)"/>
+          <image id="backPhoto" x="480" y="52" width="1076" height="696" preserveAspectRatio="xMidYMid slice" clip-path="url(#backPhotoClip)" style="display:none"/>
+          <rect x="480" y="52" width="1076" height="696" rx="28" fill="url(#backPaper)" opacity=".12" pointer-events="none"/>
+          <ellipse cx="1016" cy="400" rx="425" ry="205" fill="url(#backStub)" opacity=".16" filter="url(#backGlow)"/>
+          <rect x="10" y="12" width="1570" height="776" fill="url(#backGrain)" opacity=".06"/>
+          <line x1="452" y1="12" x2="452" y2="788" stroke="#5e84ad" stroke-width="2" stroke-dasharray="8 10" opacity=".68"/>
+        </g>
+        <path d="M42 12 H1548 Q1580 12 1580 44 V756 Q1580 788 1548 788 H42 Q10 788 10 756 V594 A42 42 0 0 0 10 510 V290 A42 42 0 0 0 10 206 V44 Q10 12 42 12Z" fill="none" stroke="#dce3e8"/>
+        <path d="M508 52 H1528 A28 28 0 0 0 1556 80 V720 A28 28 0 0 0 1528 748 H508 A28 28 0 0 0 480 720 V80 A28 28 0 0 0 508 52Z" fill="none" stroke="#93b0ca" stroke-width="2"/>
+
+        <!-- 左侧副券左下角的小纸飞机 -->
+        <g fill="none" stroke="#527fb3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" opacity=".62">
+          <path d="M76 686 L154 659 L121 708 L110 689 Z"/>
+          <path d="M76 686 L110 689 L154 659"/>
+          <path d="M110 689 L121 708 L127 693"/>
+        </g>
+        <rect id="backUploadHit" x="480" y="52" width="1076" height="696" rx="28" fill="transparent" pointer-events="all"/>
+      </svg>
+    </section>
+    <input id="backImageInput" type="file" accept="image/*" hidden>
+  </main>
+
+  <div id="cropModal" class="crop-modal" hidden>
+    <section class="crop-card" role="dialog" aria-modal="true" aria-label="裁剪背面图片">
+      <h2 class="crop-title">拖动图片调整位置，使用滑块缩放</h2>
+      <div class="crop-canvas-wrap"><canvas id="cropCanvas" width="1076" height="696"></canvas></div>
+      <div class="crop-controls">
+        <span>缩放</span><input id="cropZoom" type="range" min="1" max="3" step="0.01" value="1">
+        <button id="cropCancel" class="crop-cancel" type="button">取消</button>
+        <button id="cropApply" type="button">使用高清裁剪</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const palettes = {
+      cream: { body:'#f8f3ef', paper1:'#fffaf4', paper2:'#fdf5ec', stub1:'#f2dfdc', stub2:'#ecd2d0', ink:'#a66f72', line:'#d3aaac', soft:'#ead7d4' },
+      blue:  { body:'#f2f7fb', paper1:'#fcf9f6', paper2:'#faf7f2', stub1:'#d4e0f1', stub2:'#c8d8ec', ink:'#527fb3', line:'#93b0ca', soft:'#dce3e8' },
+      green: { body:'#f2f7f2', paper1:'#fffdf6', paper2:'#faf9ef', stub1:'#dcebdd', stub2:'#d1e3d3', ink:'#648b78', line:'#a3bfaf', soft:'#dce8df' },
+      pink:  { body:'#faf3f6', paper1:'#fffaf8', paper2:'#fdf5f4', stub1:'#f3dce5', stub2:'#ebceda', ink:'#a76d86', line:'#d3a8b9', soft:'#ead8df' },
+      purple:{ body:'#f6f3fa', paper1:'#fdfaff', paper2:'#faf6fc', stub1:'#e5def2', stub2:'#d9cfea', ink:'#796d9e', line:'#b7add0', soft:'#e3deec' }
+    };
+    let activePalette = palettes.blue;
+
+    const inkColors = new Set(['#5e84ad','#688eb7','#77a0c9','#6389b0','#7fa6ce','#527fb3','#78a2ca','#4776a5','#6593bf','#426f9d','#6d94ba','#6289b0']);
+    const lineColors = new Set(['#93b0ca','#8caccb','#93aec7','#98b2ca','#89a8c5','#9bb3c9','#8da9c2','#6f94b8']);
+    const softColors = new Set(['#dce3e8','#9cb0c6']);
+    const ticketSvgs = [$('ticketSvg'), $('ticketBackSvg')];
+    ['fill','stroke'].forEach(attr => {
+      ticketSvgs.forEach(svg => svg.querySelectorAll(`[${attr}]`).forEach(el => {
+          const value = (el.getAttribute(attr) || '').toLowerCase();
+          const tone = inkColors.has(value) ? 'ink' : lineColors.has(value) ? 'line' : softColors.has(value) ? 'soft' : '';
+          if (tone) el.setAttribute(`data-${attr}-tone`, tone);
+        })
+      );
+    });
+    function applyTheme(name){
+      activePalette = palettes[name] || palettes.blue;
+      document.body.style.background = activePalette.body;
+      document.documentElement.style.setProperty('--ink', activePalette.ink);
+      document.documentElement.style.setProperty('--line', activePalette.line);
+      $('exportBtn').style.background = activePalette.ink;
+      $('exportBtn').style.borderColor = activePalette.ink;
+      const paperStops = document.querySelectorAll('#paper stop');
+      paperStops[0].setAttribute('stop-color',activePalette.paper1); paperStops[1].setAttribute('stop-color',activePalette.paper2);
+      const stubStops = document.querySelectorAll('#stub stop');
+      stubStops[0].setAttribute('stop-color',activePalette.stub1); stubStops[1].setAttribute('stop-color',activePalette.stub2);
+      const backPaperStops = document.querySelectorAll('#backPaper stop');
+      backPaperStops[0].setAttribute('stop-color',activePalette.paper1); backPaperStops[1].setAttribute('stop-color',activePalette.paper2);
+      const backStubStops = document.querySelectorAll('#backStub stop');
+      backStubStops[0].setAttribute('stop-color',activePalette.stub1); backStubStops[1].setAttribute('stop-color',activePalette.stub2);
+      ['fill','stroke'].forEach(attr => {
+        ticketSvgs.forEach(svg => svg.querySelectorAll(`[data-${attr}-tone]`).forEach(el => {
+            el.setAttribute(attr, activePalette[el.getAttribute(`data-${attr}-tone`)]);
+          })
+        );
+      });
+    }
+    $('themeInput').addEventListener('change', event => applyTheme(event.target.value));
+    applyTheme($('themeInput').value);
+
+    const fields = ['title','en','tag','no','date','to','from','validity','collection','sideSlogan','footer'];
+    function renderVerticalSlogan(value){
+      const text = $('sideSloganText');
+      text.textContent = '';
+      const positions = [];
+      let cursor = 0, first = true, extraGap = 0;
+      [...(value || 'ONLY FOR YOU').toUpperCase()].forEach(char => {
+        if (/\s/.test(char)) { extraGap += 12; return; }
+        if (!first) cursor += 22 + extraGap;
+        positions.push({char,offset:cursor});
+        first = false; extraGap = 0;
+      });
+      const naturalHeight = positions.length ? positions[positions.length - 1].offset : 0;
+      const scale = naturalHeight > 260 ? 260 / naturalHeight : 1;
+      const startY = 386 - naturalHeight * scale / 2;
+      text.setAttribute('font-size',String(Math.max(10,14 * scale)));
+      positions.forEach(({char,offset}) => {
+        const span = document.createElementNS('http://www.w3.org/2000/svg','tspan');
+        span.setAttribute('x','98');
+        span.setAttribute('y',String(startY + offset * scale));
+        span.textContent = char;
+        text.appendChild(span);
+      });
+    }
+    function fitEnglishSubtitle(value){
+      const text = $('mainEn');
+      text.textContent = value || 'FUTURE PASS';
+      const length = Math.max(1,[...text.textContent].length);
+      const targetWidth = Math.min(300,Math.max(72,length * 36));
+      text.setAttribute('font-size','30');
+      text.setAttribute('letter-spacing','18');
+      text.setAttribute('textLength',String(targetWidth));
+      text.setAttribute('lengthAdjust','spacingAndGlyphs');
+    }
+    const sync = () => {
+      const title = $('titleInput').value || '未来券';
+      $('mainTitle').textContent = title;
+      fitEnglishSubtitle($('enInput').value);
+      $('mainTag').textContent = $('tagInput').value;
+      const no = ($('noInput').value || '001').trim();
+      $('sideNo').textContent = no;
+      $('dateText').textContent = $('dateInput').value;
+      $('toText').textContent = $('toInput').value;
+      $('fromText').textContent = $('fromInput').value;
+      $('validityText').textContent = $('validityInput').value || '只对你有效';
+      $('collectionText').textContent = $('collectionInput').value || 'FUTURE TICKET COLLECTION';
+      $('footerText').textContent = $('footerInput').value || 'FUTURE WITH YOU';
+      renderVerticalSlogan($('sideSloganInput').value);
+    };
+    fields.forEach(name => $(name+'Input').addEventListener('input', sync));
+
+    sync();
+
+    // 背面高清图片裁剪：预览比例与最终 SVG 图片区域完全一致（1076:696）。
+    const cropCanvas=$('cropCanvas'), cropCtx=cropCanvas.getContext('2d');
+    const cropState={img:null,baseScale:1,scale:1,x:0,y:0,dragging:false,lastX:0,lastY:0};
+    function clampCrop(){
+      if(!cropState.img)return;
+      const w=cropState.img.width*cropState.scale, h=cropState.img.height*cropState.scale;
+      cropState.x=Math.min(0,Math.max(cropCanvas.width-w,cropState.x));
+      cropState.y=Math.min(0,Math.max(cropCanvas.height-h,cropState.y));
+    }
+    function drawCrop(){
+      cropCtx.fillStyle='#18212c'; cropCtx.fillRect(0,0,cropCanvas.width,cropCanvas.height);
+      if(!cropState.img)return;
+      clampCrop();
+      cropCtx.drawImage(cropState.img,cropState.x,cropState.y,cropState.img.width*cropState.scale,cropState.img.height*cropState.scale);
+    }
+    $('backUploadHit').addEventListener('click',()=>$('backImageInput').click());
+    $('backImageInput').addEventListener('change',event=>{
+      const file=event.target.files&&event.target.files[0]; if(!file)return;
+      if(!file.type.startsWith('image/')){alert('请选择图片文件。');return;}
+      const url=URL.createObjectURL(file), img=new Image();
+      img.onload=()=>{
+        URL.revokeObjectURL(url); cropState.img=img;
+        cropState.baseScale=Math.max(cropCanvas.width/img.width,cropCanvas.height/img.height);
+        cropState.scale=cropState.baseScale; cropState.x=(cropCanvas.width-img.width*cropState.scale)/2; cropState.y=(cropCanvas.height-img.height*cropState.scale)/2;
+        $('cropZoom').value='1'; $('cropModal').hidden=false; drawCrop();
+      };
+      img.onerror=()=>{URL.revokeObjectURL(url);alert('图片读取失败，请换一张图片重试。');}; img.src=url;
+      event.target.value='';
+    });
+    $('cropZoom').addEventListener('input',event=>{
+      if(!cropState.img)return;
+      const old=cropState.scale, next=cropState.baseScale*Number(event.target.value);
+      const imageCenterX=(cropCanvas.width/2-cropState.x)/old, imageCenterY=(cropCanvas.height/2-cropState.y)/old;
+      cropState.scale=next; cropState.x=cropCanvas.width/2-imageCenterX*next; cropState.y=cropCanvas.height/2-imageCenterY*next; drawCrop();
+    });
+    cropCanvas.addEventListener('pointerdown',event=>{
+      cropState.dragging=true; cropCanvas.classList.add('dragging'); cropCanvas.setPointerCapture(event.pointerId);
+      cropState.lastX=event.clientX; cropState.lastY=event.clientY;
+    });
+    cropCanvas.addEventListener('pointermove',event=>{
+      if(!cropState.dragging)return;
+      const rect=cropCanvas.getBoundingClientRect(), ratio=cropCanvas.width/rect.width;
+      cropState.x+=(event.clientX-cropState.lastX)*ratio; cropState.y+=(event.clientY-cropState.lastY)*ratio;
+      cropState.lastX=event.clientX; cropState.lastY=event.clientY; drawCrop();
+    });
+    function stopCropDrag(event){cropState.dragging=false;cropCanvas.classList.remove('dragging');if(event.pointerId!==undefined&&cropCanvas.hasPointerCapture(event.pointerId))cropCanvas.releasePointerCapture(event.pointerId);}
+    cropCanvas.addEventListener('pointerup',stopCropDrag); cropCanvas.addEventListener('pointercancel',stopCropDrag);
+    $('cropCancel').addEventListener('click',()=>{$('cropModal').hidden=true;});
+    $('cropApply').addEventListener('click',()=>{
+      if(!cropState.img)return;
+      const output=document.createElement('canvas'); output.width=2152; output.height=1392;
+      const ctx=output.getContext('2d'); ctx.drawImage(cropState.img,cropState.x*2,cropState.y*2,cropState.img.width*cropState.scale*2,cropState.img.height*cropState.scale*2);
+      $('backPhoto').setAttribute('href',output.toDataURL('image/png')); $('backPhoto').style.display='block'; $('cropModal').hidden=true;
+    });
+
+    function renderSvgToPng(svgNode){
+      return new Promise((resolve,reject) => {
+        const svg = svgNode.cloneNode(true);
+        svg.removeAttribute('style'); svg.setAttribute('width','3200'); svg.setAttribute('height','1600');
+        const source = new XMLSerializer().serializeToString(svg);
+        const svgBlob=new Blob([source],{type:'image/svg+xml;charset=utf-8'}), url=URL.createObjectURL(svgBlob), img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas'); canvas.width=3200; canvas.height=1600;
+          const ctx=canvas.getContext('2d'); ctx.fillStyle=activePalette.body; ctx.fillRect(0,0,3200,1600); ctx.drawImage(img,0,0,3200,1600);
+          URL.revokeObjectURL(url);
+          canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('PNG 生成失败')),'image/png');
+        };
+        img.onerror = () => {URL.revokeObjectURL(url);reject(new Error('SVG 载入失败'));};
+        img.src=url;
+      });
+    }
+
+    const crcTable = (() => {
+      const table = new Uint32Array(256);
+      for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?0xedb88320^(c>>>1):c>>>1; table[n]=c>>>0; }
+      return table;
+    })();
+    function crc32(bytes){ let c=0xffffffff; for(const b of bytes) c=crcTable[(c^b)&255]^(c>>>8); return (c^0xffffffff)>>>0; }
+    function makeZip(files){
+      const encoder=new TextEncoder(), locals=[], centrals=[]; let offset=0, centralSize=0;
+      for(const file of files){
+        const name=encoder.encode(file.name), data=file.data, crc=crc32(data);
+        const local=new Uint8Array(30+name.length+data.length), lv=new DataView(local.buffer);
+        lv.setUint32(0,0x04034b50,true); lv.setUint16(4,20,true); lv.setUint16(6,0x0800,true); lv.setUint32(14,crc,true); lv.setUint32(18,data.length,true); lv.setUint32(22,data.length,true); lv.setUint16(26,name.length,true);
+        local.set(name,30); local.set(data,30+name.length); locals.push(local);
+        const central=new Uint8Array(46+name.length), cv=new DataView(central.buffer);
+        cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true); cv.setUint16(8,0x0800,true); cv.setUint32(16,crc,true); cv.setUint32(20,data.length,true); cv.setUint32(24,data.length,true); cv.setUint16(28,name.length,true); cv.setUint32(42,offset,true);
+        central.set(name,46); centrals.push(central); offset+=local.length; centralSize+=central.length;
+      }
+      const end=new Uint8Array(22), ev=new DataView(end.buffer);
+      ev.setUint32(0,0x06054b50,true); ev.setUint16(8,files.length,true); ev.setUint16(10,files.length,true); ev.setUint32(12,centralSize,true); ev.setUint32(16,offset,true);
+      return new Blob([...locals,...centrals,end],{type:'application/zip'});
+    }
+
+    $('exportBtn').addEventListener('click', async () => {
+      const button=$('exportBtn'), oldText=button.textContent; button.disabled=true; button.textContent='正在生成两张图片…';
+      try{
+        const [frontBlob,backBlob]=await Promise.all([renderSvgToPng($('ticketSvg')),renderSvgToPng($('ticketBackSvg'))]);
+        const zip=makeZip([
+          {name:'未来券_正面.png',data:new Uint8Array(await frontBlob.arrayBuffer())},
+          {name:'未来券_背面.png',data:new Uint8Array(await backBlob.arrayBuffer())}
+        ]);
+        const a=document.createElement('a'), url=URL.createObjectURL(zip); a.href=url; a.download=`未来券_正反面_${$('titleInput').value || '定制'}.zip`; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+      }catch(error){ alert('导出失败，请换用 Chrome 或 Edge 后重试。'); }
+      finally{ button.disabled=false; button.textContent=oldText; }
+    });
+  </script>
+</body>
+</html>
